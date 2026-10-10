@@ -1,0 +1,63 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-bg: #F4F4F5;
+  --color-card: #FFFFFF;
+  --color-card-subtle: #FAFAFA;
+  --color-border: #ECECEF;
+  --color-text: #111111;
+  --color-muted: #6B6B76;
+
+  --badge-info-bg: #E6EEFF;
+  --badge-info-text: #3B5BDB;
+  --badge-warning-bg: #FDEBDD;
+  --badge-warning-text: #B45309;
+  --badge-success-bg: #DDF6E8;
+  --badge-success-text: #15803D;
+  --badge-danger-bg: #FDE4E4;
+  --badge-danger-text: #B42318;
+}
+
+.dark {
+  --color-bg: #0F0F12;
+  --color-card: #18181C;
+  --color-card-subtle: #202025;
+  --color-border: #2A2A32;
+  --color-text: #F4F4F5;
+  --color-muted: #9E9EA8;
+
+  --badge-info-bg: rgba(59, 91, 219, 0.15);
+  --badge-info-text: #829BF8;
+  --badge-warning-bg: rgba(240, 123, 42, 0.15);
+  --badge-warning-text: #F59E0B;
+  --badge-success-bg: rgba(21, 128, 61, 0.18);
+  --badge-success-text: #4ADE80;
+  --badge-danger-bg: rgba(180, 35, 24, 0.18);
+  --badge-danger-text: #F87171;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-weight: 400;
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  overflow-x: hidden;
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-muted);
+}

@@ -1,0 +1,13 @@
+{
+  "name": "flowdesk-crm",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev:server": "npm run dev --prefix server",
+    "dev:client": "npm run dev --prefix client",
+    "seed": "npm run seed --prefix server",
+    "build:server": "npm run build --prefix server",
+    "build:client": "npm run build --prefix client",
+    "test:server": "npm run test:api --prefix server"
+  }
+}
