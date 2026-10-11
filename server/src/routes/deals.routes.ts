@@ -4,6 +4,7 @@ import { Deal } from '../models/Deal.js';
 import { FieldDefinition } from '../models/FieldDefinition.js';
 import { authenticate, requireRole } from '../middleware/auth.js';
 import { validateBody } from '../middleware/validate.js';
+import { requireWithinRecordLimit } from '../middleware/planLimits.js';
 import { dealSchema, dealUpdateSchema } from '../validations/index.js';
 import { AuthRequest } from '../types/index.js';
 import { buildOwnerFilter, parseSort } from '../utils/queryHelper.js';
@@ -165,7 +166,7 @@ dealsRouter.get('/:id', async (req: AuthRequest, res: Response) => {
 });
 
 // POST /deals
-dealsRouter.post('/', validateBody(dealSchema), async (req: AuthRequest, res: Response) => {
+dealsRouter.post('/', requireWithinRecordLimit, validateBody(dealSchema), async (req: AuthRequest, res: Response) => {
   try {
     const user = req.user!;
     const dealData = { ...req.body };

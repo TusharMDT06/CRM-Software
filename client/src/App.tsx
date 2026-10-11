@@ -29,6 +29,7 @@ import { CustomFieldsSettingsPage } from './pages/CustomFieldsSettingsPage.js';
 // Phase 3 Pages
 import { ProductsPage } from './pages/ProductsPage.js';
 import { CompanySettingsPage } from './pages/CompanySettingsPage.js';
+import { AiSettingsPage } from './pages/AiSettingsPage.js';
 import { QuotesListPage } from './pages/QuotesListPage.js';
 import { QuoteBuilderPage } from './pages/QuoteBuilderPage.js';
 import { PublicQuotePage } from './pages/PublicQuotePage.js';
@@ -38,6 +39,24 @@ import { AutomationsPage } from './pages/AutomationsPage.js';
 import { NotificationsPage } from './pages/NotificationsPage.js';
 import { NotificationSettingsPage } from './pages/NotificationSettingsPage.js';
 import { AuditLogPage } from './pages/AuditLogPage.js';
+
+// Phase 4 Stage 1 Pages
+import { SignupPage } from './pages/SignupPage.js';
+import { VerifyEmailPage } from './pages/VerifyEmailPage.js';
+import { AcceptInvitePage } from './pages/AcceptInvitePage.js';
+import { PlatformPage } from './pages/PlatformPage.js';
+
+// Phase 4 Stage 2 Pages
+import { TicketsListPage } from './pages/TicketsListPage.js';
+import { TicketDetailPage } from './pages/TicketDetailPage.js';
+import { PublicSupportPortalPage } from './pages/PublicSupportPortalPage.js';
+import { PublicTicketStatusPage } from './pages/PublicTicketStatusPage.js';
+
+// Phase 5 Marketing Pages
+import { LeadSourcesPage } from './pages/marketing/LeadSourcesPage.js';
+import { WebFormsPage } from './pages/marketing/WebFormsPage.js';
+import { CampaignsPage } from './pages/marketing/CampaignsPage.js';
+import { PublicFormPage } from './pages/public/PublicFormPage.js';
 
 import { MotionConfig } from 'motion/react';
 
@@ -61,7 +80,23 @@ export const App: React.FC = () => {
                 <Routes>
                   {/* Public Routes outside App Shell */}
                   <Route path="/login" element={<LoginPage />} />
+                  <Route path="/signup" element={<SignupPage />} />
+                  <Route path="/verify-email" element={<VerifyEmailPage />} />
+                  <Route path="/accept-invite" element={<AcceptInvitePage />} />
                   <Route path="/q/:publicToken" element={<PublicQuotePage />} />
+                  <Route path="/support/:tenantSlug" element={<PublicSupportPortalPage />} />
+                  <Route path="/support/status/:publicToken" element={<PublicTicketStatusPage />} />
+                  <Route path="/f/:formId" element={<PublicFormPage />} />
+
+                  {/* Platform Area (platform_admin only, standalone minimal shell) */}
+                  <Route
+                    path="/platform"
+                    element={
+                      <AuthGuard>
+                        <PlatformPage />
+                      </AuthGuard>
+                    }
+                  />
 
                   {/* Protected Application Routes */}
                   <Route
@@ -94,12 +129,42 @@ export const App: React.FC = () => {
                     <Route path="invoices" element={<InvoicesListPage />} />
                     <Route path="invoices/:id" element={<InvoiceDetailPage />} />
 
+                    {/* Support Section */}
+                    <Route path="tickets" element={<TicketsListPage />} />
+                    <Route path="tickets/:id" element={<TicketDetailPage />} />
+
                     {/* Automation Section */}
                     <Route path="automations" element={<AutomationsPage />} />
                     <Route path="templates" element={<TemplatesPage />} />
 
                     {/* Notifications */}
                     <Route path="notifications" element={<NotificationsPage />} />
+                    {/* Marketing Section */}
+                    <Route
+                      path="marketing/sources"
+                      element={
+                        <AuthGuard managerOnly>
+                          <LeadSourcesPage />
+                        </AuthGuard>
+                      }
+                    />
+                    <Route
+                      path="marketing/forms"
+                      element={
+                        <AuthGuard managerOnly>
+                          <WebFormsPage />
+                        </AuthGuard>
+                      }
+                    />
+                    <Route
+                      path="marketing/campaigns"
+                      element={
+                        <AuthGuard managerOnly>
+                          <CampaignsPage />
+                        </AuthGuard>
+                      }
+                    />
+
                     <Route path="settings/notifications" element={<NotificationSettingsPage />} />
 
                     {/* Admin Section */}
@@ -117,6 +182,14 @@ export const App: React.FC = () => {
                       element={
                         <AuthGuard adminOnly>
                           <CompanySettingsPage />
+                        </AuthGuard>
+                      }
+                    />
+                    <Route
+                      path="settings/ai"
+                      element={
+                        <AuthGuard adminOnly>
+                          <AiSettingsPage />
                         </AuthGuard>
                       }
                     />

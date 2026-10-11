@@ -1,9 +1,11 @@
 import mongoose, { Document, Schema, Types } from 'mongoose';
+import { tenantPlugin } from '../utils/tenantPlugin.js';
 
 export type TemplateCategory = 'follow_up' | 'proposal' | 'intro' | 'thank_you' | 'other';
 
 export interface IEmailTemplate extends Document {
   _id: Types.ObjectId;
+  tenantId: Types.ObjectId;
   name: string;
   subject: string;
   body: string;
@@ -55,5 +57,6 @@ const EmailTemplateSchema = new Schema<IEmailTemplate>(
 );
 
 EmailTemplateSchema.index({ name: 'text', subject: 'text' });
+EmailTemplateSchema.plugin(tenantPlugin);
 
 export const EmailTemplate = mongoose.model<IEmailTemplate>('EmailTemplate', EmailTemplateSchema);

@@ -1,5 +1,6 @@
 import mongoose, { Document, Schema, Types } from 'mongoose';
 import crypto from 'crypto';
+import { tenantPlugin } from '../utils/tenantPlugin.js';
 
 export type QuoteStatus =
   | 'draft'
@@ -34,6 +35,7 @@ export interface IQuoteApproval {
 
 export interface IQuote extends Document {
   _id: Types.ObjectId;
+  tenantId: Types.ObjectId;
   number: string;
   status: QuoteStatus;
   deal: Types.ObjectId;
@@ -134,7 +136,6 @@ const QuoteSchema = new Schema<IQuote>(
     number: {
       type: String,
       required: true,
-      unique: true,
       trim: true,
       index: true,
     },
@@ -261,6 +262,8 @@ const QuoteSchema = new Schema<IQuote>(
   }
 );
 
+QuoteSchema.index({ tenantId: 1, number: 1 }, { unique: true });
 QuoteSchema.index({ number: 'text', notes: 'text' });
+QuoteSchema.plugin(tenantPlugin);
 
 export const Quote = mongoose.model<IQuote>('Quote', QuoteSchema);

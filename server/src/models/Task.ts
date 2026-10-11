@@ -1,10 +1,12 @@
 import mongoose, { Document, Schema, Types } from 'mongoose';
+import { tenantPlugin } from '../utils/tenantPlugin.js';
 
 export type TaskStatus = 'open' | 'done';
 export type TaskPriority = 'low' | 'medium' | 'high';
 
 export interface ITask extends Document {
   _id: Types.ObjectId;
+  tenantId: Types.ObjectId;
   title: string;
   description: string;
   dueDate: Date;
@@ -64,6 +66,7 @@ const TaskSchema = new Schema<ITask>(
   }
 );
 
-TaskSchema.index({ title: 'text', description: 'text' });
+TaskSchema.index({ name: 'text', description: 'text' });
+TaskSchema.plugin(tenantPlugin);
 
 export const Task = mongoose.model<ITask>('Task', TaskSchema);

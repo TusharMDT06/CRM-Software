@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -14,6 +14,7 @@ import {
   Plus,
   Trash2,
   ExternalLink,
+  Sparkles,
 } from 'lucide-react';
 import { Deal, Account, Contact, Task, User, DealStage } from '../types/index.js';
 import { api } from '../api/client.js';
@@ -31,6 +32,8 @@ import { PageTransition } from '../components/motion/PageTransition.js';
 import { Reveal } from '../components/motion/Reveal.js';
 import { EntityQuotesAndInvoices } from '../components/billing/EntityQuotesAndInvoices.js';
 import { HistoryTab } from '../components/common/HistoryTab.js';
+import { RecordSummaryModal } from '../components/ai/RecordSummaryModal.js';
+import { explainScoreWithAi, getAiStatus } from '../api/ai.js';
 
 export const DealDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -44,6 +47,33 @@ export const DealDetailPage: React.FC = () => {
   const [emailModalOpen, setEmailModalOpen] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [taskModalOpen, setTaskModalOpen] = useState(false);
+  const [summaryModalOpen, setSummaryModalOpen] = useState(false);
+  const [explainingRisk, setExplainingRisk] = useState(false);
+  const [aiAvailable, setAiAvailable] = useState(false);
+
+  useEffect(() => {
+    getAiStatus()
+      .then((status) => {
+        if (status.isConfigured && status.aiEnabled) {
+          setAiAvailable(true);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleExplainRisk = async () => {
+    if (!id || explainingRisk) return;
+    setExplainingRisk(true);
+    try {
+      await explainScoreWithAi('deal', id);
+      success('AI risk explanation generated for deal');
+      queryClient.invalidateQueries({ queryKey: ['deal', id] });
+    } catch (err: any) {
+      error(err.message || 'Failed to generate explanation');
+    } finally {
+      setExplainingRisk(false);
+    }
+  };
 
   // Quick Task state
   const [taskTitle, setTaskTitle] = useState('');
@@ -286,6 +316,13 @@ export const DealDetailPage: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
+            {aiAvailable && (
+              <Button variant="secondary" size="md" onClick={() => setSummaryModalOpen(true)}>
+                <Sparkles className="w-4 h-4 text-primary" />
+                <span>Summarise</span>
+              </Button>
+            )}
+
             <Button variant="secondary" size="md" onClick={() => setDrawerOpen(true)}>
               <Edit className="w-4 h-4" />
               <span>Edit</span>
@@ -372,6 +409,64 @@ export const DealDetailPage: React.FC = () => {
               </button>
             </div>
           </div>
+
+          {/* Deal Risk Card */}
+          {deal.aiRisk && (
+            <div className="bg-card border border-border rounded-card p-4 shadow-sm space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <Sparkles className="w-4 h-4 text-primary" />
+                  <span className="text-xs font-semibold uppercase tracking-wider text-muted">
+                    Deal Risk
+                  </span>
+                </div>
+                <span
+                  className={`px-2.5 py-0.5 rounded-full text-xs font-semibold uppercase ${
+                    deal.aiRisk.level === 'high'
+                      ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400'
+                      : deal.aiRisk.level === 'medium'
+                      ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-400'
+                      : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400'
+                  }`}
+                >
+                  {deal.aiRisk.level} Risk • {deal.aiRisk.score}/100
+                </span>
+              </div>
+
+              {deal.aiRisk.reasons && deal.aiRisk.reasons.length > 0 && (
+                <ul className="text-xs space-y-1 text-muted">
+                  {deal.aiRisk.reasons.map((r, i) => (
+                    <li key={i} className="flex items-start gap-1.5">
+                      <span className="text-primary mt-0.5">•</span>
+                      <span>{r}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              {deal.aiRisk.explanation && (
+                <div className="text-xs bg-muted/20 border border-border/50 rounded-lg p-2.5 text-foreground leading-relaxed">
+                  <div className="text-[10px] uppercase font-semibold text-muted mb-1 flex items-center gap-1">
+                    <Sparkles className="w-3 h-3 text-primary" /> AI Analysis & Next Step
+                  </div>
+                  {deal.aiRisk.explanation}
+                </div>
+              )}
+
+              {aiAvailable && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleExplainRisk}
+                  isLoading={explainingRisk}
+                  className="w-full text-xs"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-primary" />
+                  <span>{deal.aiRisk.explanation ? 'Refresh AI Analysis' : 'Explain Risk with AI'}</span>
+                </Button>
+              )}
+            </div>
+          )}
 
           {/* Details Card */}
           <div className="bg-card border border-border rounded-card p-5 shadow-sm space-y-4">
@@ -932,6 +1027,15 @@ export const DealDetailPage: React.FC = () => {
           account: accountObj || {},
           contact: contactObj || {},
         }}
+      />
+
+      {/* Record Summary Modal */}
+      <RecordSummaryModal
+        isOpen={summaryModalOpen}
+        onClose={() => setSummaryModalOpen(false)}
+        entityType="deal"
+        entityId={id!}
+        recordName={deal.title}
       />
     </PageTransition>
   );

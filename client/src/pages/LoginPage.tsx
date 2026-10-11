@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { ShieldCheck, UserCheck, Briefcase, ArrowRight, Lock, Mail } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.js';
@@ -114,6 +114,13 @@ export const LoginPage: React.FC = () => {
             <span>Sign In</span>
             <ArrowRight className="w-4 h-4 ml-1" />
           </Button>
+
+          <div className="text-center pt-2">
+            <span className="text-xs text-muted">New to Flowdesk? </span>
+            <Link to="/signup" className="text-xs font-semibold text-foreground hover:underline">
+              Create a workspace
+            </Link>
+          </div>
         </form>
 
         {/* Demo Accounts Quick-Fill Section */}

@@ -1,17 +1,49 @@
-export type UserRole = 'admin' | 'manager' | 'sales';
+export type UserRole = 'platform_admin' | 'admin' | 'manager' | 'sales';
+
+export interface TenantLimits {
+  maxSeats: number;
+  maxRecords: number;
+  aiEnabled: boolean;
+  aiMonthlyRequests: number;
+}
+
+export interface Tenant {
+  _id: string;
+  name: string;
+  slug: string;
+  status: 'active' | 'suspended';
+  plan: 'free' | 'pro';
+  limits: TenantLimits;
+  seatsCount?: number;
+  recordsCount?: number;
+  lastActiveAt?: string;
+  suspendedReason?: string;
+  deletionRequestedAt?: string;
+  createdAt?: string;
+}
 
 export interface User {
   _id: string;
+  tenantId?: string;
   name: string;
   email: string;
   role: UserRole;
   active: boolean;
+  isVerified?: boolean;
   createdAt?: string;
   updatedAt?: string;
 }
 
 export type LeadSource = 'website' | 'referral' | 'social' | 'email' | 'event' | 'other';
 export type LeadStatus = 'new' | 'contacted' | 'qualified' | 'converted' | 'lost';
+
+export interface LeadScore {
+  score: number;
+  grade: 'hot' | 'warm' | 'cold';
+  reasons: string[];
+  explanation?: string;
+  scoredAt: string;
+}
 
 export interface Lead {
   _id: string;
@@ -25,6 +57,122 @@ export interface Lead {
   notes: string;
   custom?: Record<string, any>;
   owner: User | string;
+  aiScore?: LeadScore;
+  // Phase 5: Marketing Attribution additions
+  channel?: MarketingChannel;
+  campaign?: {
+    externalId?: string;
+    name?: string;
+  };
+  adSet?: {
+    externalId?: string;
+    name?: string;
+  };
+  ad?: {
+    externalId?: string;
+    name?: string;
+  };
+  formName?: string;
+  utm?: {
+    source?: string;
+    medium?: string;
+    campaign?: string;
+    term?: string;
+    content?: string;
+  };
+  clickIds?: {
+    gclid?: string;
+    fbclid?: string;
+  };
+  landingPage?: string;
+  referrer?: string;
+  consent?: {
+    given: boolean;
+    text?: string;
+    at?: string;
+    via?: string;
+  };
+  inquiryCount?: number;
+  lastInquiryAt?: string;
+  firstContactAt?: string | null;
+  isTest?: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type MarketingChannel =
+  | 'google_ads'
+  | 'facebook'
+  | 'instagram'
+  | 'website_form'
+  | 'whatsapp'
+  | 'manual'
+  | 'import'
+  | 'api'
+  | 'other';
+
+export type LeadSourcePlatformType =
+  | 'meta_lead_ads'
+  | 'google_ads'
+  | 'website_form'
+  | 'generic_webhook';
+
+export type LeadSourceStatus = 'active' | 'paused' | 'error';
+
+export interface LeadSourceCounters {
+  received: number;
+  created: number;
+  duplicates: number;
+  failed: number;
+}
+
+export interface LeadSourceItem {
+  _id: string;
+  tenantId: string;
+  name: string;
+  type: LeadSourcePlatformType;
+  status: LeadSourceStatus;
+  config: Record<string, any>;
+  webhookId: string;
+  routingRules: any[];
+  counters: LeadSourceCounters;
+  lastLeadAt: string | null;
+  lastError: string | null;
+  createdBy: User | string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LeadEventItem {
+  _id: string;
+  tenantId: string;
+  source: string;
+  providerLeadId?: string;
+  status: 'received' | 'processed' | 'duplicate' | 'ignored' | 'failed';
+  attempts: number;
+  error?: string | null;
+  rawPayload: Record<string, any>;
+  lead?: {
+    _id: string;
+    name: string;
+    email: string;
+    status: string;
+    isTest?: boolean;
+    createdAt: string;
+  } | null;
+  isTest: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CampaignItem {
+  _id: string;
+  tenantId: string;
+  channel: MarketingChannel;
+  externalId: string;
+  name: string;
+  leadCount?: number;
+  firstSeenAt: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -59,6 +207,14 @@ export interface Contact {
 
 export type DealStage = 'qualified' | 'proposal' | 'negotiation' | 'won' | 'lost';
 
+export interface DealRisk {
+  level: 'low' | 'medium' | 'high';
+  score: number;
+  reasons: string[];
+  explanation?: string;
+  evaluatedAt: string;
+}
+
 export interface Deal {
   _id: string;
   title: string;
@@ -70,6 +226,7 @@ export interface Deal {
   closedAt: string | null;
   custom?: Record<string, any>;
   owner: User | string;
+  aiRisk?: DealRisk;
   createdAt: string;
   updatedAt: string;
 }
@@ -107,6 +264,9 @@ export interface DashboardSummary {
     percentage: number;
     activeCount: number;
     healthyCount: number;
+    highRiskCount?: number;
+    mediumRiskCount?: number;
+    lowRiskCount?: number;
   };
   taskStats: {
     total: number;
@@ -114,6 +274,10 @@ export interface DashboardSummary {
     open: number;
     done: number;
     overdue: number;
+  };
+  ticketStats?: {
+    open: number;
+    breached: number;
   };
   dealsByStage: Array<{
     stage: DealStage;
@@ -133,6 +297,7 @@ export interface DashboardSummary {
     newLeadsWaiting: number;
     dealsInNegotiation: number;
     overdueTasks: number;
+    openTickets?: number;
   };
 }
 
@@ -520,5 +685,89 @@ export interface AuditLog {
   ip?: string;
   userAgent?: string;
   createdAt: string;
+}
+
+// Support Tickets Types
+export type TicketStatus = 'new' | 'open' | 'pending' | 'resolved' | 'closed';
+export type TicketPriority = 'low' | 'medium' | 'high' | 'urgent';
+export type TicketChannel = 'manual' | 'portal' | 'email' | 'whatsapp';
+
+export interface TicketAttachment {
+  filename: string;
+  url: string;
+  size?: number;
+  mimeType?: string;
+}
+
+export interface TicketMessage {
+  _id: string;
+  ticket: string;
+  author?: User | null;
+  type: 'public_reply' | 'internal_note' | 'system';
+  body: string;
+  attachments?: TicketAttachment[];
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface Ticket {
+  _id: string;
+  number: string;
+  subject: string;
+  description: string;
+  status: TicketStatus;
+  priority: TicketPriority;
+  channel: TicketChannel;
+  contact?: Contact | null;
+  account?: Account | null;
+  deal?: Deal | null;
+  assignee?: User | null;
+  createdBy?: User | null;
+  tags?: string[];
+  firstResponseAt?: string | null;
+  resolvedAt?: string | null;
+  slaFirstResponseDue?: string | null;
+  slaResolutionDue?: string | null;
+  slaBreached?: {
+    firstResponse: boolean;
+    resolution: boolean;
+  };
+  slaPendingPausedAt?: string | null;
+  slaPendingTotalPausedMs?: number;
+  publicToken?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CannedResponse {
+  _id: string;
+  shortcut?: string;
+  title: string;
+  body: string;
+  category?: string;
+  shared: boolean;
+  createdBy: string;
+  createdAt: string;
+}
+
+export interface SlaPriorityTarget {
+  firstResponseHours: number;
+  resolutionHours: number;
+}
+
+export interface SlaPolicy {
+  _id: string;
+  name: string;
+  operatingHours: 'business_hours' | '24x7';
+  businessHoursStart: string;
+  businessHoursEnd: string;
+  timeZone: string;
+  priorities: {
+    low: SlaPriorityTarget;
+    medium: SlaPriorityTarget;
+    high: SlaPriorityTarget;
+    urgent: SlaPriorityTarget;
+  };
+  isDefault: boolean;
 }
 

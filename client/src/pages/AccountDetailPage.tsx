@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft,
@@ -16,9 +16,12 @@ import {
   Trash2,
   Kanban,
   Contact as ContactIcon,
+  LifeBuoy,
+  Sparkles,
 } from 'lucide-react';
 import { Account, Contact, Deal, User } from '../types/index.js';
 import { api } from '../api/client.js';
+import { fetchTickets } from '../api/tickets.js';
 import { useAuth } from '../context/AuthContext.js';
 import { useToast } from '../context/ToastContext.js';
 import { Badge, getStatusBadgeVariant } from '../components/ui/Badge.js';
@@ -33,6 +36,8 @@ import { PageTransition } from '../components/motion/PageTransition.js';
 import { Reveal } from '../components/motion/Reveal.js';
 import { EntityQuotesAndInvoices } from '../components/billing/EntityQuotesAndInvoices.js';
 import { HistoryTab } from '../components/common/HistoryTab.js';
+import { RecordSummaryModal } from '../components/ai/RecordSummaryModal.js';
+import { getAiStatus } from '../api/ai.js';
 
 export const AccountDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -41,11 +46,30 @@ export const AccountDetailPage: React.FC = () => {
   const { success, error } = useToast();
   const queryClient = useQueryClient();
 
-  const [activeTab, setActiveTab] = useState<'timeline' | 'notes' | 'tasks' | 'emails' | 'quotes' | 'invoices' | 'history'>('timeline');
+  const [activeTab, setActiveTab] = useState<'timeline' | 'notes' | 'tasks' | 'emails' | 'quotes' | 'invoices' | 'history' | 'tickets'>('timeline');
+
+  // Query linked tickets
+  const { data: accountTicketsData } = useQuery({
+    queryKey: ['account-tickets', id],
+    queryFn: () => fetchTickets({ account: id }),
+    enabled: activeTab === 'tickets',
+  });
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [emailModalOpen, setEmailModalOpen] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [taskModalOpen, setTaskModalOpen] = useState(false);
+  const [summaryModalOpen, setSummaryModalOpen] = useState(false);
+  const [aiAvailable, setAiAvailable] = useState(false);
+
+  useEffect(() => {
+    getAiStatus()
+      .then((status) => {
+        if (status.isConfigured && status.aiEnabled) {
+          setAiAvailable(true);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // Quick Task state
   const [taskTitle, setTaskTitle] = useState('');
@@ -255,6 +279,13 @@ export const AccountDetailPage: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
+            {aiAvailable && (
+              <Button variant="secondary" size="md" onClick={() => setSummaryModalOpen(true)}>
+                <Sparkles className="w-4 h-4 text-primary" />
+                <span>Summarise</span>
+              </Button>
+            )}
+
             <Button variant="secondary" size="md" onClick={() => setDrawerOpen(true)}>
               <Edit className="w-4 h-4" />
               <span>Edit</span>
@@ -465,6 +496,16 @@ export const AccountDetailPage: React.FC = () => {
             >
               History
             </button>
+            <button
+              onClick={() => setActiveTab('tickets')}
+              className={`px-3.5 py-2 text-xs font-semibold rounded-xl transition-all ${
+                activeTab === 'tickets'
+                  ? 'bg-card text-foreground shadow-sm border border-border dark:bg-[#202025]'
+                  : 'text-muted hover:text-foreground'
+              }`}
+            >
+              Tickets
+            </button>
           </div>
 
           {activeTab === 'timeline' && (
@@ -521,6 +562,56 @@ export const AccountDetailPage: React.FC = () => {
 
           {activeTab === 'history' && (
             <HistoryTab entityType="account" entityId={id!} />
+          )}
+
+          {activeTab === 'tickets' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-muted">
+                  Support Tickets ({accountTicketsData?.tickets?.length || 0})
+                </h4>
+                <Link to="/tickets">
+                  <Button variant="secondary" size="sm">
+                    <LifeBuoy className="w-3.5 h-3.5" />
+                    <span>All Tickets</span>
+                  </Button>
+                </Link>
+              </div>
+
+              {(!accountTicketsData?.tickets || accountTicketsData.tickets.length === 0) ? (
+                <div className="p-8 text-center border border-border rounded-2xl bg-card">
+                  <p className="text-xs text-muted-foreground">No support tickets found for this account.</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-border border border-border rounded-2xl bg-card overflow-hidden">
+                  {accountTicketsData.tickets.map((t: any) => (
+                    <div
+                      key={t._id}
+                      onClick={() => navigate(`/tickets/${t._id}`)}
+                      className="p-3.5 hover:bg-muted/40 cursor-pointer flex items-center justify-between gap-3 text-xs"
+                    >
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono font-semibold">{t.number}</span>
+                          <span className="font-medium text-foreground">{t.subject}</span>
+                        </div>
+                        <span className="text-muted-foreground text-[11px] block mt-0.5">
+                          {new Date(t.createdAt).toLocaleDateString()} &bull; Channel: {t.channel}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="capitalize px-2 py-0.5 rounded-md bg-muted text-foreground text-[10px] font-semibold">
+                          {t.priority}
+                        </span>
+                        <span className="capitalize px-2 py-0.5 rounded-md bg-muted text-foreground text-[10px] font-semibold">
+                          {t.status}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
         </Reveal>
 
@@ -830,6 +921,15 @@ export const AccountDetailPage: React.FC = () => {
             industry: account.industry,
           },
         }}
+      />
+
+      {/* Record Summary Modal */}
+      <RecordSummaryModal
+        isOpen={summaryModalOpen}
+        onClose={() => setSummaryModalOpen(false)}
+        entityType="account"
+        entityId={id!}
+        recordName={account.name}
       />
     </PageTransition>
   );

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Sun, Moon, Menu } from 'lucide-react';
+import { Search, Sun, Moon, Menu, Sparkles } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.js';
 import { useTheme } from '../../context/ThemeContext.js';
 import { NotificationBell } from '../notifications/NotificationBell.js';
@@ -9,6 +9,7 @@ interface TopBarProps {
   subtitle?: string;
   onOpenCommandPalette: () => void;
   onOpenMobileSidebar: () => void;
+  onOpenCopilot?: () => void;
 }
 
 export const TopBar: React.FC<TopBarProps> = ({
@@ -16,6 +17,7 @@ export const TopBar: React.FC<TopBarProps> = ({
   subtitle,
   onOpenCommandPalette,
   onOpenMobileSidebar,
+  onOpenCopilot,
 }) => {
   const { user } = useAuth();
   const { theme, toggleTheme } = useTheme();
@@ -82,6 +84,18 @@ export const TopBar: React.FC<TopBarProps> = ({
         >
           <Search className="w-4 h-4" />
         </button>
+
+        {/* Copilot AI Trigger Button */}
+        {onOpenCopilot && (
+          <button
+            onClick={onOpenCopilot}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-primary/30 bg-primary/10 text-primary hover:bg-primary/20 text-xs font-medium transition-colors shadow-sm"
+            title="Open Flowdesk Copilot"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-primary" />
+            <span className="hidden sm:inline">Copilot</span>
+          </button>
+        )}
 
         {/* Dark mode toggle */}
         <button

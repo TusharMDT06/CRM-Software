@@ -1,4 +1,5 @@
 import mongoose, { Document, Schema, Types } from 'mongoose';
+import { tenantPlugin } from '../utils/tenantPlugin.js';
 
 export type ActivityType =
   | 'note'
@@ -7,13 +8,15 @@ export type ActivityType =
   | 'email'
   | 'task'
   | 'stage_change'
+  | 'ticket'
   | 'system';
 
 export type CallOutcome = 'connected' | 'no_answer' | 'left_message';
-export type EntityType = 'lead' | 'contact' | 'account' | 'deal';
+export type EntityType = 'lead' | 'contact' | 'account' | 'deal' | 'ticket';
 
 export interface IActivity extends Document {
   _id: Types.ObjectId;
+  tenantId: Types.ObjectId;
   type: ActivityType;
   subject: string;
   body: string;
@@ -32,7 +35,7 @@ const ActivitySchema = new Schema<IActivity>(
   {
     type: {
       type: String,
-      enum: ['note', 'call', 'meeting', 'email', 'task', 'stage_change', 'system'],
+      enum: ['note', 'call', 'meeting', 'email', 'task', 'stage_change', 'ticket', 'system'],
       required: true,
       index: true,
     },
@@ -48,7 +51,7 @@ const ActivitySchema = new Schema<IActivity>(
     },
     entityType: {
       type: String,
-      enum: ['lead', 'contact', 'account', 'deal'],
+      enum: ['lead', 'contact', 'account', 'deal', 'ticket'],
       required: true,
       index: true,
     },
@@ -87,7 +90,7 @@ const ActivitySchema = new Schema<IActivity>(
   }
 );
 
-// Compound index on (entityType, entityId, occurredAt) as specified
-ActivitySchema.index({ entityType: 1, entityId: 1, occurredAt: -1 });
+ActivitySchema.index({ tenantId: 1, entityType: 1, entityId: 1, occurredAt: -1 });
+ActivitySchema.plugin(tenantPlugin);
 
 export const Activity = mongoose.model<IActivity>('Activity', ActivitySchema);

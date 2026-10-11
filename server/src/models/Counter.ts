@@ -1,7 +1,9 @@
 import mongoose, { Document, Schema, Types } from 'mongoose';
+import { tenantPlugin } from '../utils/tenantPlugin.js';
 
 export interface ICounter extends Document {
   _id: Types.ObjectId;
+  tenantId: Types.ObjectId;
   prefix: string; // e.g. 'QT', 'INV'
   year: number; // e.g. 2026
   seq: number; // incremented atomically
@@ -30,13 +32,14 @@ const CounterSchema = new Schema<ICounter>(
   }
 );
 
-// One counter per prefix and year
-CounterSchema.index({ prefix: 1, year: 1 }, { unique: true });
+// One counter per tenant, prefix, and year
+CounterSchema.index({ tenantId: 1, prefix: 1, year: 1 }, { unique: true });
+CounterSchema.plugin(tenantPlugin);
 
 export const Counter = mongoose.model<ICounter>('Counter', CounterSchema);
 
 /**
- * Generates an atomic, unforgeable, monotonically increasing document number
+ * Generates an atomic, unforgeable, monotonically increasing document number per tenant
  * Format: ${prefix}-${year}-${seq:04d} (e.g. QT-2026-0001, INV-2026-0001)
  */
 export async function getNextDocumentNumber(

@@ -37,6 +37,8 @@ export const LeadsPage: React.FC = () => {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [sourceFilter, setSourceFilter] = useState('');
+  const [channelFilter, setChannelFilter] = useState('');
+  const [campaignFilter, setCampaignFilter] = useState('');
   const [sort, setSort] = useState('createdAt:desc');
 
   // Drawer & modal state
@@ -63,7 +65,7 @@ export const LeadsPage: React.FC = () => {
 
   // Query Leads
   const { data: responseData, isLoading } = useQuery({
-    queryKey: ['leads', { page, search, statusFilter, sourceFilter, sort }],
+    queryKey: ['leads', { page, search, statusFilter, sourceFilter, channelFilter, campaignFilter, sort }],
     queryFn: async () => {
       const params = new URLSearchParams();
       params.append('page', page.toString());
@@ -71,6 +73,8 @@ export const LeadsPage: React.FC = () => {
       if (search) params.append('q', search);
       if (statusFilter) params.append('status', statusFilter);
       if (sourceFilter) params.append('source', sourceFilter);
+      if (channelFilter) params.append('channel', channelFilter);
+      if (campaignFilter) params.append('campaign', campaignFilter);
       if (sort) params.append('sort', sort);
 
       const res = await api.get(`/leads?${params.toString()}`);
@@ -209,7 +213,14 @@ export const LeadsPage: React.FC = () => {
       sortable: true,
       render: (lead) => (
         <div>
-          <div className="font-medium text-foreground">{lead.name}</div>
+          <div className="font-medium text-foreground flex items-center gap-1.5">
+            <span>{lead.name}</span>
+            {lead.isTest && (
+              <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                TEST
+              </span>
+            )}
+          </div>
           <div className="text-xs text-muted flex items-center gap-2 mt-0.5">
             <span className="flex items-center gap-1">
               <Mail className="w-3 h-3 opacity-60" /> {lead.email}
@@ -217,6 +228,27 @@ export const LeadsPage: React.FC = () => {
           </div>
         </div>
       ),
+    },
+    {
+      key: 'channel',
+      header: 'Channel',
+      sortable: true,
+      render: (lead) => {
+        const ch = lead.channel || 'other';
+        return (
+          <span className="text-xs capitalize text-foreground bg-[#F4F4F5] dark:bg-[#202025] px-2 py-0.5 rounded-md">
+            {ch.replace('_', ' ')}
+          </span>
+        );
+      },
+    },
+    {
+      key: 'campaign',
+      header: 'Campaign',
+      render: (lead) => {
+        const camp = lead.campaign?.name || lead.campaign?.externalId || '—';
+        return <span className="text-xs text-muted truncate max-w-[130px] block">{camp}</span>;
+      },
     },
     {
       key: 'company',
@@ -237,16 +269,6 @@ export const LeadsPage: React.FC = () => {
         <Badge variant={getStatusBadgeVariant(lead.status)}>
           {lead.status}
         </Badge>
-      ),
-    },
-    {
-      key: 'source',
-      header: 'Source',
-      sortable: true,
-      render: (lead) => (
-        <span className="text-xs capitalize text-muted bg-[#F4F4F5] dark:bg-[#202025] px-2 py-0.5 rounded-md">
-          {lead.source}
-        </span>
       ),
     },
     {
@@ -320,11 +342,42 @@ export const LeadsPage: React.FC = () => {
               <option value="">All Sources</option>
               <option value="website">Website</option>
               <option value="referral">Referral</option>
-              <option value="social">Social</option>
-              <option value="email">Email</option>
-              <option value="event">Event</option>
+              <option value="cold_outreach">Cold Outreach</option>
+              <option value="inbound">Inbound</option>
+              <option value="advertisement">Advertisement</option>
               <option value="other">Other</option>
             </select>
+
+            <select
+              value={channelFilter}
+              onChange={(e) => {
+                setChannelFilter(e.target.value);
+                setPage(1);
+              }}
+              className="text-xs bg-card border border-border rounded-xl px-3 py-2 text-foreground focus:outline-none focus:ring-1 focus:ring-black dark:focus:ring-white"
+            >
+              <option value="">All Channels</option>
+              <option value="google_ads">Google Ads</option>
+              <option value="facebook">Facebook</option>
+              <option value="instagram">Instagram</option>
+              <option value="website_form">Website Form</option>
+              <option value="whatsapp">WhatsApp</option>
+              <option value="api">API / Webhook</option>
+              <option value="import">Import</option>
+              <option value="manual">Manual</option>
+              <option value="other">Other</option>
+            </select>
+
+            <input
+              type="text"
+              placeholder="Campaign..."
+              value={campaignFilter}
+              onChange={(e) => {
+                setCampaignFilter(e.target.value);
+                setPage(1);
+              }}
+              className="text-xs bg-card border border-border rounded-xl px-3 py-2 text-foreground focus:outline-none focus:ring-1 focus:ring-black dark:focus:ring-white w-28 placeholder:text-muted"
+            />
           </div>
         }
         actionSlot={

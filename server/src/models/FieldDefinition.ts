@@ -1,10 +1,12 @@
 import mongoose, { Document, Schema, Types } from 'mongoose';
 import { EntityType } from './Activity.js';
+import { tenantPlugin } from '../utils/tenantPlugin.js';
 
 export type FieldType = 'text' | 'number' | 'date' | 'select' | 'checkbox' | 'url';
 
 export interface IFieldDefinition extends Document {
   _id: Types.ObjectId;
+  tenantId: Types.ObjectId;
   entity: EntityType;
   key: string;
   label: string;
@@ -63,8 +65,9 @@ const FieldDefinitionSchema = new Schema<IFieldDefinition>(
   }
 );
 
-FieldDefinitionSchema.index({ entity: 1, key: 1 }, { unique: true });
-FieldDefinitionSchema.index({ entity: 1, order: 1 });
+FieldDefinitionSchema.index({ tenantId: 1, entity: 1, key: 1 }, { unique: true });
+FieldDefinitionSchema.index({ tenantId: 1, entity: 1, order: 1 });
+FieldDefinitionSchema.plugin(tenantPlugin);
 
 export const FieldDefinition = mongoose.model<IFieldDefinition>(
   'FieldDefinition',

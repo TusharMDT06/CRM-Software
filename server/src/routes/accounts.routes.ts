@@ -4,6 +4,7 @@ import { Account } from '../models/Account.js';
 import { FieldDefinition } from '../models/FieldDefinition.js';
 import { authenticate, requireRole } from '../middleware/auth.js';
 import { validateBody } from '../middleware/validate.js';
+import { requireWithinRecordLimit } from '../middleware/planLimits.js';
 import { accountSchema, accountUpdateSchema } from '../validations/index.js';
 import { AuthRequest } from '../types/index.js';
 import { buildOwnerFilter, parseSort } from '../utils/queryHelper.js';
@@ -275,7 +276,7 @@ accountsRouter.get('/:id', async (req: AuthRequest, res: Response) => {
 });
 
 // POST /accounts
-accountsRouter.post('/', validateBody(accountSchema), async (req: AuthRequest, res: Response) => {
+accountsRouter.post('/', requireWithinRecordLimit, validateBody(accountSchema), async (req: AuthRequest, res: Response) => {
   try {
     const user = req.user!;
     const accountData = { ...req.body };

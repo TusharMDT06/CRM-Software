@@ -1,7 +1,9 @@
 import mongoose, { Document, Schema, Types } from 'mongoose';
+import { tenantPlugin } from '../utils/tenantPlugin.js';
 
 export interface IContact extends Document {
   _id: Types.ObjectId;
+  tenantId: Types.ObjectId;
   firstName: string;
   lastName: string;
   email: string;
@@ -66,5 +68,6 @@ const ContactSchema = new Schema<IContact>(
 );
 
 ContactSchema.index({ firstName: 'text', lastName: 'text', email: 'text' });
+ContactSchema.plugin(tenantPlugin);
 
 export const Contact = mongoose.model<IContact>('Contact', ContactSchema);

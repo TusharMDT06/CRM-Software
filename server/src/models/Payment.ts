@@ -1,4 +1,5 @@
 import mongoose, { Document, Schema, Types } from 'mongoose';
+import { tenantPlugin } from '../utils/tenantPlugin.js';
 
 export type PaymentMethod =
   | 'bank_transfer'
@@ -10,6 +11,7 @@ export type PaymentMethod =
 
 export interface IPayment extends Document {
   _id: Types.ObjectId;
+  tenantId: Types.ObjectId;
   invoice: Types.ObjectId;
   amount: number; // integer paise > 0
   method: PaymentMethod;
@@ -65,5 +67,8 @@ const PaymentSchema = new Schema<IPayment>(
     timestamps: true,
   }
 );
+
+PaymentSchema.index({ tenantId: 1, invoice: 1 });
+PaymentSchema.plugin(tenantPlugin);
 
 export const Payment = mongoose.model<IPayment>('Payment', PaymentSchema);

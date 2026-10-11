@@ -7,6 +7,7 @@ import { CompanySettings, getCompanySettings } from '../models/CompanySettings.j
 import { getNextDocumentNumber } from '../models/Counter.js';
 import { authenticate, requireRole } from '../middleware/auth.js';
 import { validateBody } from '../middleware/validate.js';
+import { requireWithinRecordLimit } from '../middleware/planLimits.js';
 import {
   createInvoiceSchema,
   updateInvoiceSchema,
@@ -160,7 +161,7 @@ invoicesRouter.get('/:id', async (req: AuthRequest, res: Response) => {
 });
 
 // POST /invoices
-invoicesRouter.post('/', validateBody(createInvoiceSchema), async (req: AuthRequest, res: Response) => {
+invoicesRouter.post('/', requireWithinRecordLimit, validateBody(createInvoiceSchema), async (req: AuthRequest, res: Response) => {
   try {
     const user = req.user!;
     const { items, taxMode, dueDate, issueDate, ...body } = req.body;

@@ -3,6 +3,7 @@ import { FilterQuery } from 'mongoose';
 import { Task } from '../models/Task.js';
 import { authenticate, requireRole } from '../middleware/auth.js';
 import { validateBody } from '../middleware/validate.js';
+import { requireWithinRecordLimit } from '../middleware/planLimits.js';
 import { taskSchema, taskUpdateSchema } from '../validations/index.js';
 import { AuthRequest } from '../types/index.js';
 import { buildOwnerFilter, parseSort } from '../utils/queryHelper.js';
@@ -93,7 +94,7 @@ tasksRouter.get('/:id', async (req: AuthRequest, res: Response) => {
 });
 
 // POST /tasks
-tasksRouter.post('/', validateBody(taskSchema), async (req: AuthRequest, res: Response) => {
+tasksRouter.post('/', requireWithinRecordLimit, validateBody(taskSchema), async (req: AuthRequest, res: Response) => {
   try {
     const user = req.user!;
     const taskData = { ...req.body };

@@ -1,9 +1,11 @@
 import mongoose, { Document, Schema, Types } from 'mongoose';
+import { tenantPlugin } from '../utils/tenantPlugin.js';
 
 export type ProductUnit = 'nos' | 'hours' | 'days' | 'months' | 'kg' | 'other';
 
 export interface IProduct extends Document {
   _id: Types.ObjectId;
+  tenantId: Types.ObjectId;
   name: string;
   sku: string;
   description?: string;
@@ -27,7 +29,6 @@ const ProductSchema = new Schema<IProduct>(
     sku: {
       type: String,
       required: true,
-      unique: true,
       uppercase: true,
       trim: true,
       index: true,
@@ -73,6 +74,8 @@ const ProductSchema = new Schema<IProduct>(
   }
 );
 
+ProductSchema.index({ tenantId: 1, sku: 1 }, { unique: true });
 ProductSchema.index({ name: 'text', description: 'text', sku: 'text' });
+ProductSchema.plugin(tenantPlugin);
 
 export const Product = mongoose.model<IProduct>('Product', ProductSchema);

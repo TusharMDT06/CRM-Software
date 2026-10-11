@@ -5,6 +5,37 @@ export const loginSchema = z.object({
   password: z.string().min(6, 'Password must be at least 6 characters'),
 });
 
+export const signupSchema = z.object({
+  orgName: z.string().trim().min(2, 'Organization name must be at least 2 characters'),
+  name: z.string().trim().min(2, 'Your name must be at least 2 characters'),
+  email: z.string().trim().email('Invalid email address'),
+  password: z.string().min(6, 'Password must be at least 6 characters'),
+});
+
+export const inviteUserSchema = z.object({
+  name: z.string().trim().min(2, 'Name must be at least 2 characters'),
+  email: z.string().trim().email('Invalid email address'),
+  role: z.enum(['admin', 'manager', 'sales']).default('sales'),
+});
+
+export const acceptInviteSchema = z.object({
+  token: z.string().min(1, 'Invite token is required'),
+  password: z.string().min(6, 'Password must be at least 6 characters'),
+});
+
+export const updateTenantLimitsSchema = z.object({
+  plan: z.enum(['free', 'pro']).optional(),
+  maxSeats: z.coerce.number().min(1).optional(),
+  maxRecords: z.coerce.number().min(10).optional(),
+  aiEnabled: z.boolean().optional(),
+  aiMonthlyRequests: z.coerce.number().min(0).optional(),
+});
+
+export const updateTenantStatusSchema = z.object({
+  status: z.enum(['active', 'suspended']),
+  suspendedReason: z.string().trim().optional(),
+});
+
 export const bootstrapSchema = z.object({
   name: z.string().trim().min(2, 'Name must be at least 2 characters'),
   email: z.string().trim().email('Invalid email address'),
@@ -38,6 +69,52 @@ export const leadSchema = z.object({
   notes: z.string().trim().optional().default(''),
   custom: z.record(z.any()).optional().default({}),
   owner: z.string().optional(),
+  // Phase 5 additions
+  channel: z.enum([
+    'google_ads',
+    'facebook',
+    'instagram',
+    'website_form',
+    'whatsapp',
+    'manual',
+    'import',
+    'api',
+    'other',
+  ]).optional().default('manual'),
+  campaign: z.object({
+    externalId: z.string().optional(),
+    name: z.string().optional(),
+  }).optional(),
+  adSet: z.object({
+    externalId: z.string().optional(),
+    name: z.string().optional(),
+  }).optional(),
+  ad: z.object({
+    externalId: z.string().optional(),
+    name: z.string().optional(),
+  }).optional(),
+  formName: z.string().optional(),
+  utm: z.object({
+    source: z.string().optional(),
+    medium: z.string().optional(),
+    campaign: z.string().optional(),
+    term: z.string().optional(),
+    content: z.string().optional(),
+  }).optional(),
+  clickIds: z.object({
+    gclid: z.string().optional(),
+    fbclid: z.string().optional(),
+  }).optional(),
+  landingPage: z.string().optional(),
+  referrer: z.string().optional(),
+  consent: z.object({
+    given: z.boolean(),
+    text: z.string().optional(),
+    at: z.coerce.date().optional(),
+    via: z.string().optional(),
+  }).optional(),
+  inquiryCount: z.coerce.number().optional().default(1),
+  isTest: z.boolean().optional().default(false),
 });
 
 export const leadUpdateSchema = leadSchema.partial();
@@ -287,6 +364,11 @@ export const workflowSchema = z.object({
       'quote_declined',
       'invoice_overdue',
       'invoice_paid',
+      'ticket_created',
+      'ticket_assigned',
+      'ticket_sla_warning',
+      'ticket_sla_breached',
+      'ticket_resolved',
     ]),
     config: z.record(z.any()).optional().default({}),
   }),
@@ -296,4 +378,81 @@ export const workflowSchema = z.object({
 });
 
 export const workflowUpdateSchema = workflowSchema.partial();
+
+// Ticket Schemas
+export const createTicketSchema = z.object({
+  subject: z.string().trim().min(3, 'Subject must be at least 3 characters'),
+  description: z.string().trim().optional().default(''),
+  status: z.enum(['new', 'open', 'pending', 'resolved', 'closed']).optional().default('new'),
+  priority: z.enum(['low', 'medium', 'high', 'urgent']).optional().default('medium'),
+  channel: z.enum(['manual', 'portal', 'email', 'whatsapp']).optional().default('manual'),
+  contact: z.string().trim().optional().nullable(),
+  account: z.string().trim().optional().nullable(),
+  assignee: z.string().trim().optional().nullable(),
+  deal: z.string().trim().optional().nullable(),
+  tags: z.array(z.string().trim()).optional().default([]),
+});
+
+export const updateTicketSchema = z.object({
+  subject: z.string().trim().min(3).optional(),
+  description: z.string().trim().optional(),
+  status: z.enum(['new', 'open', 'pending', 'resolved', 'closed']).optional(),
+  priority: z.enum(['low', 'medium', 'high', 'urgent']).optional(),
+  channel: z.enum(['manual', 'portal', 'email', 'whatsapp']).optional(),
+  contact: z.string().trim().optional().nullable(),
+  account: z.string().trim().optional().nullable(),
+  assignee: z.string().trim().optional().nullable(),
+  deal: z.string().trim().optional().nullable(),
+  tags: z.array(z.string().trim()).optional(),
+});
+
+export const createTicketMessageSchema = z.object({
+  type: z.enum(['public_reply', 'internal_note', 'system']).default('public_reply'),
+  body: z.string().trim().min(1, 'Message body cannot be empty'),
+  attachments: z
+    .array(
+      z.object({
+        filename: z.string(),
+        url: z.string(),
+        size: z.number().optional().default(0),
+        mimeType: z.string().optional().default('application/octet-stream'),
+      })
+    )
+    .optional()
+    .default([]),
+});
+
+export const createCannedResponseSchema = z.object({
+  shortcut: z.string().trim().min(1, 'Shortcut is required'),
+  title: z.string().trim().min(1, 'Title is required'),
+  body: z.string().trim().min(1, 'Content body is required'),
+  category: z.string().trim().optional().default('General'),
+  isShared: z.boolean().optional().default(true),
+});
+
+export const updateCannedResponseSchema = createCannedResponseSchema.partial();
+
+export const updateSlaPolicySchema = z.object({
+  operatingHours: z.enum(['business_hours', '24x7']).optional(),
+  timezone: z.string().trim().optional(),
+  targets: z
+    .object({
+      low: z.object({ firstResponseMinutes: z.number().min(1), resolutionMinutes: z.number().min(1) }).optional(),
+      medium: z.object({ firstResponseMinutes: z.number().min(1), resolutionMinutes: z.number().min(1) }).optional(),
+      high: z.object({ firstResponseMinutes: z.number().min(1), resolutionMinutes: z.number().min(1) }).optional(),
+      urgent: z.object({ firstResponseMinutes: z.number().min(1), resolutionMinutes: z.number().min(1) }).optional(),
+    })
+    .optional(),
+});
+
+export const publicPortalSubmitTicketSchema = z.object({
+  name: z.string().trim().min(2, 'Name must be at least 2 characters'),
+  email: z.string().trim().email('Valid email is required'),
+  phone: z.string().trim().optional().default(''),
+  company: z.string().trim().optional().default(''),
+  subject: z.string().trim().min(3, 'Subject must be at least 3 characters'),
+  description: z.string().trim().min(5, 'Please provide more details in the description'),
+  priority: z.enum(['low', 'medium', 'high', 'urgent']).optional().default('medium'),
+  website: z.string().optional().default(''), // Honeypot field
+});
 

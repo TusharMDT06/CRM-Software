@@ -82,13 +82,19 @@ CLIENT_URL=http://localhost:5173
 NODE_ENV=development
 
 # Optional Resend Configuration for Email Sending
-# 1. Create an API key in the Resend dashboard at https://resend.com/api-keys
 RESEND_API_KEY=
-# 2. Set sender address. Default test sender is "Flowdesk <onboarding@resend.dev>"
-# Note: In test mode, Resend allows sending only to the email address of your Resend account.
-# To send to real customer emails, verify your domain in Resend and set EMAIL_FROM to an address on that domain.
 EMAIL_FROM=Flowdesk <onboarding@resend.dev>
+
+# Google Gemini API Configuration (Official @google/genai SDK)
+# Required to enable Copilot, smart email drafting, record summaries, and natural-language search
+GEMINI_API_KEY=
+# Strong model for Copilot chat, multi-step tool loops, record summaries, and scoring explanations
+AI_MODEL=gemini-2.0-flash
+# Fast/cost-effective model for natural-language search filters and short drafts
+AI_MODEL_FAST=gemini-2.0-flash-lite
 ```
+
+> **Note on Gemini Models**: Model IDs are read strictly from environment variables and never hardcoded. Check the current official model list in Google AI Studio at [ai.google.dev/gemini-api/docs](https://ai.google.dev/gemini-api/docs) or within your Google AI Studio dashboard. If `GEMINI_API_KEY` is missing or empty, all AI UI components remain gracefully hidden with no fake outputs. AI is OFF by default per organization until an administrator completes the Data Privacy Gate in **Settings > Company Settings > AI Intelligence**.
 
 ### 3. Seed Database with Realistic Demo Data
 
@@ -108,6 +114,9 @@ npm run test:api
 
 # Run Phase 2 verification suite (23 tests)
 npx tsx src/test-phase2-api.ts
+
+# Run Stage 4 AI features verification suite (27 tests: tool scoping, prompt injection, whitelist, provider mock, scoring)
+npm run test:stage4
 ```
 
 ### 5. Start Development Servers

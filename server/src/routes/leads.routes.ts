@@ -7,6 +7,7 @@ import { Deal } from '../models/Deal.js';
 import { FieldDefinition } from '../models/FieldDefinition.js';
 import { authenticate, requireRole } from '../middleware/auth.js';
 import { validateBody } from '../middleware/validate.js';
+import { requireWithinRecordLimit } from '../middleware/planLimits.js';
 import { leadSchema, leadUpdateSchema } from '../validations/index.js';
 import { AuthRequest } from '../types/index.js';
 import { buildOwnerFilter, parseSort } from '../utils/queryHelper.js';
@@ -29,6 +30,15 @@ function buildLeadQuery(user: any, queryParams: any): FilterQuery<any> {
   }
   if (queryParams.source) {
     query.source = queryParams.source;
+  }
+  if (queryParams.channel) {
+    query.channel = queryParams.channel;
+  }
+  if (queryParams.campaign) {
+    query['campaign.name'] = { $regex: String(queryParams.campaign).trim(), $options: 'i' };
+  }
+  if (queryParams.isTest !== undefined) {
+    query.isTest = queryParams.isTest === 'true';
   }
 
   if (queryParams.q) {
@@ -96,6 +106,13 @@ leadsRouter.get('/export', async (req: AuthRequest, res: Response) => {
       { key: 'phone', label: 'Phone' },
       { key: 'company', label: 'Company' },
       { key: 'source', label: 'Source' },
+      { key: 'channel', label: 'Channel' },
+      { key: 'campaign', label: 'Campaign' },
+      { key: 'formName', label: 'Form Name' },
+      { key: 'utmSource', label: 'UTM Source' },
+      { key: 'utmCampaign', label: 'UTM Campaign' },
+      { key: 'inquiryCount', label: 'Inquiry Count' },
+      { key: 'isTest', label: 'Is Test' },
       { key: 'status', label: 'Status' },
       { key: 'value', label: 'Value (INR)' },
       { key: 'ownerName', label: 'Owner' },
@@ -114,6 +131,13 @@ leadsRouter.get('/export', async (req: AuthRequest, res: Response) => {
         phone: lead.phone,
         company: lead.company,
         source: lead.source,
+        channel: lead.channel || 'other',
+        campaign: lead.campaign?.name || lead.campaign?.externalId || '',
+        formName: lead.formName || '',
+        utmSource: lead.utm?.source || '',
+        utmCampaign: lead.utm?.campaign || '',
+        inquiryCount: lead.inquiryCount || 1,
+        isTest: lead.isTest ? 'true' : 'false',
         status: lead.status,
         value: lead.value,
         ownerName: typeof lead.owner === 'object' ? (lead.owner as any)?.name : '',
@@ -291,7 +315,7 @@ leadsRouter.get('/:id', async (req: AuthRequest, res: Response) => {
 });
 
 // POST /leads
-leadsRouter.post('/', validateBody(leadSchema), async (req: AuthRequest, res: Response) => {
+leadsRouter.post('/', requireWithinRecordLimit, validateBody(leadSchema), async (req: AuthRequest, res: Response) => {
   try {
     const user = req.user!;
     const leadData = { ...req.body };
@@ -462,6 +486,8 @@ leadsRouter.post('/:id/convert', async (req: AuthRequest, res: Response) => {
       stage: 'qualified',
       expectedClose,
       owner: ownerId,
+      channel: lead.channel || 'other',
+      campaign: lead.campaign,
     });
 
     await logActivity({

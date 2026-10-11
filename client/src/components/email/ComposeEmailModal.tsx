@@ -17,6 +17,7 @@ import { useToast } from '../../context/ToastContext.js';
 import { Modal } from '../ui/Modal.js';
 import { Button } from '../ui/Button.js';
 import { formatINR } from '../../utils/formatters.js';
+import { draftEmailWithAi, getAiStatus } from '../../api/ai.js';
 
 interface ComposeEmailModalProps {
   isOpen: boolean;
@@ -53,6 +54,46 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
   const [mailtoUrl, setMailtoUrl] = useState<string>('');
   const [fieldMenuOpen, setFieldMenuOpen] = useState(false);
 
+  // Stage 4: AI Draft Controls
+  const [aiDraftOpen, setAiDraftOpen] = useState(false);
+  const [aiGoal, setAiGoal] = useState('');
+  const [aiTone, setAiTone] = useState<'friendly' | 'formal' | 'short'>('friendly');
+  const [aiGenerating, setAiGenerating] = useState(false);
+  const [aiAvailable, setAiAvailable] = useState(false);
+
+  useEffect(() => {
+    getAiStatus()
+      .then((status) => {
+        if (status.isConfigured && status.aiEnabled) {
+          setAiAvailable(true);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleGenerateAiDraft = async () => {
+    if (!aiGoal.trim() || aiGenerating) return;
+    setAiGenerating(true);
+    try {
+      const draft = await draftEmailWithAi({
+        goal: aiGoal.trim(),
+        tone: aiTone,
+        entityType,
+        entityId,
+        templateId: selectedTemplateId || undefined,
+        recipientEmail: to,
+      });
+      if (draft.subject) setSubject(draft.subject);
+      if (draft.body) setBody(draft.body);
+      success('AI email draft generated! You can edit before sending.');
+      setAiDraftOpen(false);
+    } catch (err: any) {
+      error(err.message || 'Failed to generate AI email draft');
+    } finally {
+      setAiGenerating(false);
+    }
+  };
+
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Sync recipientEmail when prop changes
@@ -61,7 +102,11 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
   }, [recipientEmail]);
 
   // Fetch email config
-  const { data: emailConfig } = useQuery<{ isConfigured: boolean; isTestDomain: boolean }>({
+  const { data: emailConfig } = useQuery<{
+    isConfigured: boolean;
+    isTestDomain: boolean;
+    allowedTestEmail?: string;
+  }>({
     queryKey: ['email-config'],
     queryFn: async () => {
       const res = await api.get('/emails/config');
@@ -178,17 +223,26 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
       handleClose();
     },
     onError: (err: any) => {
-      if (err.status === 503 || err.response?.status === 503) {
-        const errorData = err.response?.data || {};
-        setSmtpWarning(
-          errorData.message ||
-            'SMTP email service is not configured. You can open your default email app or log the email as sent manually.'
-        );
+      const errorData = err.response?.data || {};
+      const status = err.response?.status || err.status;
+      const serverMessage = errorData.message || err.message || 'Failed to send email';
+
+      const isTestRestriction =
+        status === 403 ||
+        errorData.code === 'RESEND_TEST_MODE_RESTRICTION' ||
+        serverMessage.includes('only send testing emails') ||
+        serverMessage.includes('verify a domain');
+
+      if (status === 503 || isTestRestriction) {
+        setSmtpWarning(serverMessage);
         const encodedSubject = encodeURIComponent(resolvedContent.resolvedSubject);
         const encodedBody = encodeURIComponent(resolvedContent.resolvedBody);
-        setMailtoUrl(`mailto:${encodeURIComponent(to)}?subject=${encodedSubject}&body=${encodedBody}`);
+        setMailtoUrl(
+          errorData.mailtoUrl ||
+            `mailto:${encodeURIComponent(to)}?subject=${encodedSubject}&body=${encodedBody}`
+        );
       } else {
-        error(err.message || 'Failed to send email');
+        error(serverMessage);
       }
     },
   });
@@ -261,9 +315,23 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
       <div className="space-y-4">
         {/* Test Mode Banner */}
         {emailConfig?.isTestDomain && (
-          <div className="p-3 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 text-blue-900 dark:text-blue-200 text-xs flex items-center gap-2">
-            <Info className="w-4 h-4 shrink-0 text-blue-600 dark:text-blue-400" />
-            <span>Test mode: emails can only be delivered to your own Resend account email until you verify a domain.</span>
+          <div className="p-3 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 text-blue-900 dark:text-blue-200 text-xs flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Info className="w-4 h-4 shrink-0 text-blue-600 dark:text-blue-400" />
+              <span>
+                Test mode: Sandbox allows live inbox delivery only to{' '}
+                <strong className="underline">{emailConfig.allowedTestEmail || 'your Resend account email'}</strong>.
+              </span>
+            </div>
+            {emailConfig.allowedTestEmail && to !== emailConfig.allowedTestEmail && (
+              <button
+                type="button"
+                onClick={() => setTo(emailConfig.allowedTestEmail!)}
+                className="shrink-0 px-2.5 py-1 text-[11px] font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors cursor-pointer"
+              >
+                Use My Test Email
+              </button>
+            )}
           </div>
         )}
 
@@ -322,33 +390,106 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
             </select>
           </div>
 
-          {/* Merge Field Inserter Dropdown */}
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setFieldMenuOpen(!fieldMenuOpen)}
-              className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg bg-card border border-border text-foreground hover:bg-[#F4F4F5] dark:hover:bg-[#202025]"
-            >
-              <span>Insert Field</span>
-              <ChevronDown className="w-3 h-3 text-muted" />
-            </button>
+          <div className="flex items-center gap-2">
+            {aiAvailable && (
+              <button
+                type="button"
+                onClick={() => setAiDraftOpen(!aiDraftOpen)}
+                className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-lg border transition-colors ${
+                  aiDraftOpen
+                    ? 'bg-primary/10 border-primary text-primary'
+                    : 'bg-card border-border text-foreground hover:bg-[#F4F4F5] dark:hover:bg-[#202025]'
+                }`}
+              >
+                <Sparkles className="w-3.5 h-3.5 text-primary" />
+                <span>Draft with AI</span>
+              </button>
+            )}
 
-            {fieldMenuOpen && (
-              <div className="absolute right-0 top-full mt-1 w-52 bg-card border border-border rounded-xl shadow-lg z-50 py-1 text-xs">
-                {Object.keys(mergeTokens).map((token) => (
+            {/* Merge Field Inserter Dropdown */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setFieldMenuOpen(!fieldMenuOpen)}
+                className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg bg-card border border-border text-foreground hover:bg-[#F4F4F5] dark:hover:bg-[#202025]"
+              >
+                <span>Insert Field</span>
+                <ChevronDown className="w-3 h-3 text-muted" />
+              </button>
+
+              {fieldMenuOpen && (
+                <div className="absolute right-0 top-full mt-1 w-52 bg-card border border-border rounded-xl shadow-lg z-50 py-1 text-xs">
+                  {Object.keys(mergeTokens).map((token) => (
+                    <button
+                      key={token}
+                      type="button"
+                      onClick={() => handleInsertToken(token)}
+                      className="w-full text-left px-3 py-1.5 hover:bg-[#F4F4F5] dark:hover:bg-[#202025] text-foreground font-mono text-[11px]"
+                    >
+                      {token}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Collapsible AI Draft Generator Control */}
+        {aiDraftOpen && (
+          <div className="p-3.5 rounded-xl border border-primary/30 bg-primary/5 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-primary flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5" /> Draft with AI (Gemini)
+              </span>
+              <span className="text-[10px] text-muted">User always edits & sends manually</span>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-medium text-foreground mb-1">
+                Goal / Purpose of this email *
+              </label>
+              <input
+                type="text"
+                value={aiGoal}
+                onChange={(e) => setAiGoal(e.target.value)}
+                placeholder="e.g. Follow up on demo, discuss pricing objections, or request feedback"
+                className="w-full px-3 py-1.5 text-xs bg-card border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+            </div>
+
+            <div className="flex items-center justify-between gap-3 pt-1">
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-medium text-muted">Tone:</span>
+                {(['friendly', 'formal', 'short'] as const).map((t) => (
                   <button
-                    key={token}
+                    key={t}
                     type="button"
-                    onClick={() => handleInsertToken(token)}
-                    className="w-full text-left px-3 py-1.5 hover:bg-[#F4F4F5] dark:hover:bg-[#202025] text-foreground font-mono text-[11px]"
+                    onClick={() => setAiTone(t)}
+                    className={`px-2.5 py-1 text-[11px] rounded-md capitalize font-medium transition-colors ${
+                      aiTone === t
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-card border border-border text-muted hover:text-foreground'
+                    }`}
                   >
-                    {token}
+                    {t}
                   </button>
                 ))}
               </div>
-            )}
+
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={handleGenerateAiDraft}
+                isLoading={aiGenerating}
+                disabled={!aiGoal.trim()}
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Generate Draft</span>
+              </Button>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Inputs */}
         <div className="space-y-3">

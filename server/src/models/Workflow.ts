@@ -1,4 +1,5 @@
 import mongoose, { Document, Schema, Types } from 'mongoose';
+import { tenantPlugin } from '../utils/tenantPlugin.js';
 
 export type WorkflowTriggerType =
   | 'lead_created'
@@ -10,7 +11,13 @@ export type WorkflowTriggerType =
   | 'quote_accepted'
   | 'quote_declined'
   | 'invoice_overdue'
-  | 'invoice_paid';
+  | 'invoice_paid'
+  | 'ticket_created'
+  | 'ticket_assigned'
+  | 'ticket_sla_warning'
+  | 'ticket_sla_breached'
+  | 'ticket_resolved'
+  | 'deal_risk_high';
 
 export type ConditionOperator =
   | 'equals'
@@ -51,8 +58,8 @@ export interface IWorkflowAction {
     notificationTitle?: string;
     notificationBody?: string;
 
-    // update_field (whitelist: lead.status, deal.stage, owner)
-    targetField?: 'lead.status' | 'deal.stage' | 'owner';
+    // update_field (whitelist: lead.status, deal.stage, owner, ticket.status, ticket.priority)
+    targetField?: 'lead.status' | 'deal.stage' | 'owner' | 'ticket.status' | 'ticket.priority';
     targetValue?: string;
 
     // assign_owner
@@ -62,6 +69,7 @@ export interface IWorkflowAction {
 
 export interface IWorkflow extends Document {
   _id: Types.ObjectId;
+  tenantId: Types.ObjectId;
   name: string;
   description?: string;
   enabled: boolean;
@@ -149,5 +157,8 @@ const WorkflowSchema = new Schema<IWorkflow>(
     timestamps: true,
   }
 );
+
+WorkflowSchema.index({ tenantId: 1, enabled: 1 });
+WorkflowSchema.plugin(tenantPlugin);
 
 export const Workflow = mongoose.model<IWorkflow>('Workflow', WorkflowSchema);

@@ -16,11 +16,17 @@ import {
   BarChart3,
   ShieldCheck,
   ShieldAlert,
+  Shield,
   Building,
   Bell,
   Settings,
   LogOut,
   X,
+  LifeBuoy,
+  Sparkles,
+  Radio,
+  FileInput,
+  Target,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.js';
 
@@ -29,7 +35,7 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ onCloseMobile }) => {
-  const { user, isAdmin, isManager, logout } = useAuth();
+  const { user, isAdmin, isManager, isPlatformAdmin, tenant, logout } = useAuth();
 
   const sections = [
     {
@@ -51,20 +57,40 @@ export const Sidebar: React.FC<SidebarProps> = ({ onCloseMobile }) => {
       ],
     },
     {
+      title: 'Support',
+      items: [
+        { to: '/tickets', label: 'Tickets', icon: LifeBuoy },
+      ],
+    },
+    {
       title: 'Automation',
       items: [
         ...(isAdmin || isManager ? [{ to: '/automations', label: 'Automations', icon: Zap }] : []),
         { to: '/templates', label: 'Templates', icon: Mail },
       ],
     },
+    ...(isAdmin || isManager
+      ? [
+          {
+            title: 'Marketing',
+            items: [
+              { to: '/marketing/sources', label: 'Sources', icon: Radio },
+              { to: '/marketing/forms', label: 'Forms', icon: FileInput },
+              { to: '/marketing/campaigns', label: 'Campaigns', icon: Target },
+            ],
+          },
+        ]
+      : []),
     {
       title: 'Admin',
       items: [
+        ...(isPlatformAdmin ? [{ to: '/platform', label: 'Platform Admin', icon: Shield }] : []),
         { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
         { to: '/reports', label: 'Reports', icon: BarChart3 },
         ...(isAdmin ? [{ to: '/audit-log', label: 'Audit Log', icon: ShieldAlert }] : []),
         ...(isAdmin ? [{ to: '/team', label: 'Team', icon: ShieldCheck }] : []),
         ...(isAdmin ? [{ to: '/settings/company', label: 'Company Settings', icon: Building }] : []),
+        ...(isAdmin ? [{ to: '/settings/ai', label: 'AI Intelligence', icon: Sparkles }] : []),
         { to: '/settings/notifications', label: 'Notifications', icon: Bell },
         ...(isAdmin ? [{ to: '/settings/custom-fields', label: 'Custom Fields', icon: Settings }] : []),
       ],
@@ -95,6 +121,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ onCloseMobile }) => {
                   CRM
                 </span>
               </span>
+              {tenant && (
+                <div className="text-[10px] text-muted truncate max-w-[120px] font-medium">
+                  {tenant.name}
+                </div>
+              )}
             </div>
           </div>
 

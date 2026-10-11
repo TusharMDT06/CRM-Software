@@ -5,6 +5,7 @@ import { Quote } from '../models/Quote.js';
 import { Invoice } from '../models/Invoice.js';
 import { authenticate, requireRole } from '../middleware/auth.js';
 import { validateBody } from '../middleware/validate.js';
+import { requireWithinRecordLimit } from '../middleware/planLimits.js';
 import { productSchema, productUpdateSchema } from '../validations/index.js';
 import { AuthRequest } from '../types/index.js';
 import { parseSort } from '../utils/queryHelper.js';
@@ -77,7 +78,7 @@ productsRouter.get('/:id', async (req: AuthRequest, res: Response) => {
 });
 
 // POST /products
-productsRouter.post('/', validateBody(productSchema), async (req: AuthRequest, res: Response) => {
+productsRouter.post('/', requireWithinRecordLimit, validateBody(productSchema), async (req: AuthRequest, res: Response) => {
   try {
     const user = req.user!;
     const { sku, ...body } = req.body;

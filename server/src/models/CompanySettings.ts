@@ -1,4 +1,5 @@
 import mongoose, { Document, Schema, Types } from 'mongoose';
+import { tenantPlugin } from '../utils/tenantPlugin.js';
 
 export interface BankDetails {
   accountName: string;
@@ -9,6 +10,7 @@ export interface BankDetails {
 
 export interface ICompanySettings extends Document {
   _id: Types.ObjectId;
+  tenantId: Types.ObjectId;
   legalName: string;
   address: string;
   state: string; // Used for Intra/Inter tax mode comparison
@@ -24,6 +26,9 @@ export interface ICompanySettings extends Document {
   defaultTerms: string;
   quotePrefix: string;
   invoicePrefix: string;
+  aiEnabled?: boolean;
+  aiConsentConfirmedBy?: Types.ObjectId;
+  aiConsentConfirmedAt?: Date;
   updatedBy?: Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
@@ -123,6 +128,17 @@ const CompanySettingsSchema = new Schema<ICompanySettings>(
       trim: true,
       uppercase: true,
     },
+    aiEnabled: {
+      type: Boolean,
+      default: false,
+    },
+    aiConsentConfirmedBy: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+    },
+    aiConsentConfirmedAt: {
+      type: Date,
+    },
     updatedBy: {
       type: Schema.Types.ObjectId,
       ref: 'User',
@@ -133,13 +149,16 @@ const CompanySettingsSchema = new Schema<ICompanySettings>(
   }
 );
 
+CompanySettingsSchema.index({ tenantId: 1 }, { unique: true });
+CompanySettingsSchema.plugin(tenantPlugin);
+
 export const CompanySettings = mongoose.model<ICompanySettings>(
   'CompanySettings',
   CompanySettingsSchema
 );
 
 /**
- * Fetch singleton CompanySettings, auto-initializing if empty
+ * Fetch singleton CompanySettings per tenant, auto-initializing if empty
  */
 export async function getCompanySettings(): Promise<ICompanySettings> {
   let settings = await CompanySettings.findOne();

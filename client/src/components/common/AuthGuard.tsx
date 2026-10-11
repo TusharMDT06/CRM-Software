@@ -5,10 +5,11 @@ import { useAuth } from '../../context/AuthContext.js';
 interface AuthGuardProps {
   children: React.ReactNode;
   adminOnly?: boolean;
+  managerOnly?: boolean;
 }
 
-export const AuthGuard: React.FC<AuthGuardProps> = ({ children, adminOnly = false }) => {
-  const { isAuthenticated, isLoading, isAdmin } = useAuth();
+export const AuthGuard: React.FC<AuthGuardProps> = ({ children, adminOnly = false, managerOnly = false }) => {
+  const { isAuthenticated, isLoading, isAdmin, isManager } = useAuth();
   const location = useLocation();
 
   if (isLoading) {
@@ -27,6 +28,10 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({ children, adminOnly = fals
   }
 
   if (adminOnly && !isAdmin) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  if (managerOnly && !isAdmin && !isManager) {
     return <Navigate to="/dashboard" replace />;
   }
 

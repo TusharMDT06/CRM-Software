@@ -32,6 +32,7 @@ export interface ComputedLineItem extends RawLineItem {
 
 export interface DocumentTotals {
   items: ComputedLineItem[];
+  lineDetails: ComputedLineItem[];
   subtotal: number; // sum of rawAmount (paise)
   discountTotal: number; // sum of discountAmount (paise)
   taxableTotal: number; // sum of taxableAmount (paise)
@@ -146,6 +147,7 @@ export function calculateDocumentTotals(
 
   return {
     items,
+    lineDetails: items,
     subtotal,
     discountTotal,
     taxableTotal,

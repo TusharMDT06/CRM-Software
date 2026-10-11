@@ -243,6 +243,7 @@ emailsRouter.get('/config', (_req: AuthRequest, res: Response) => {
     isConfigured,
     isTestDomain,
     emailFrom: isTestDomain ? 'onboarding@resend.dev' : undefined,
+    allowedTestEmail: isTestDomain ? 'tusharmedatwal06@gmail.com' : undefined,
   });
 });
 
@@ -300,6 +301,27 @@ emailsRouter.post('/send', sendEmailLimiter, validateBody(sendEmailSchema), asyn
       let statusCode = 502;
       const errMsg = error.message || 'Email delivery failed';
       const errName = (error as any).name || '';
+
+      const isTestRestriction =
+        errMsg.includes('only send testing emails to your own email address') ||
+        errMsg.includes('verify a domain');
+
+      if (isTestRestriction) {
+        const mailtoUrl = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(
+          resolvedSubject
+        )}&body=${encodeURIComponent(resolvedBody)}`;
+
+        res.status(403).json({
+          code: 'RESEND_TEST_MODE_RESTRICTION',
+          message:
+            `Resend Sandbox: Live delivery to external recipients (${to}) requires a verified custom domain at resend.com/domains. In sandbox mode, only ${process.env.EMAIL_FROM || 'onboarding@resend.dev'} -> tusharmedatwal06@gmail.com is delivered. Use "Log as sent to timeline" or "Open in my email app" below.`,
+          mailtoUrl,
+          resolvedSubject,
+          resolvedBody,
+          allowedTestEmail: 'tusharmedatwal06@gmail.com',
+        });
+        return;
+      }
 
       if (
         errName === 'validation_error' ||

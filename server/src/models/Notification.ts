@@ -1,4 +1,5 @@
 import mongoose, { Document, Schema, Types } from 'mongoose';
+import { tenantPlugin } from '../utils/tenantPlugin.js';
 
 export type NotificationType =
   | 'task_assigned'
@@ -17,10 +18,17 @@ export type NotificationType =
   | 'invoice_overdue'
   | 'workflow_disabled'
   | 'import_finished'
+  | 'ticket_assigned'
+  | 'ticket_sla_warning'
+  | 'ticket_sla_breached'
+  | 'deal_risk_high'
+  | 'lead_assigned'
+  | 'lead_repeat_inquiry'
   | 'general';
 
 export interface INotification extends Document {
   _id: Types.ObjectId;
+  tenantId: Types.ObjectId;
   user: Types.ObjectId; // recipient
   type: NotificationType;
   title: string;
@@ -84,6 +92,7 @@ const NotificationSchema = new Schema<INotification>(
 
 // TTL index to automatically delete notifications after 90 days (7,776,000 seconds)
 NotificationSchema.index({ createdAt: 1 }, { expireAfterSeconds: 90 * 24 * 60 * 60 });
-NotificationSchema.index({ user: 1, readAt: 1, createdAt: -1 });
+NotificationSchema.index({ tenantId: 1, user: 1, readAt: 1, createdAt: -1 });
+NotificationSchema.plugin(tenantPlugin);
 
 export const Notification = mongoose.model<INotification>('Notification', NotificationSchema);

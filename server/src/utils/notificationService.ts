@@ -6,6 +6,7 @@ import {
   DEFAULT_PREFERENCES,
 } from '../models/NotificationPreference.js';
 import { User, IUser } from '../models/User.js';
+import { runWithTenantContext, getCurrentTenantId } from './tenantContext.js';
 
 export interface CreateNotificationParams {
   userId: Types.ObjectId | string;
@@ -16,6 +17,36 @@ export interface CreateNotificationParams {
   entityType?: string;
   entityId?: string;
   actorId?: Types.ObjectId | string | null;
+}
+
+/**
+ * Sends a raw direct transactional email (verification, invites) via Resend or logs fallback
+ */
+export async function sendEmailDirect(params: {
+  to: string;
+  subject: string;
+  htmlBody: string;
+  plainText: string;
+}): Promise<void> {
+  const { to, subject, htmlBody, plainText } = params;
+  if (!process.env.RESEND_API_KEY) {
+    console.log(`[Resend Fallback Email] To: ${to} | Subject: ${subject}\n${plainText}`);
+    return;
+  }
+
+  try {
+    const resend = new Resend(process.env.RESEND_API_KEY);
+    const emailFrom = process.env.EMAIL_FROM || 'Flowdesk CRM <notifications@resend.dev>';
+    await resend.emails.send({
+      from: emailFrom,
+      to: [to],
+      subject,
+      html: htmlBody,
+      text: plainText,
+    });
+  } catch (err) {
+    console.warn('[NotificationService] Direct email send failed:', err);
+  }
 }
 
 /**
@@ -33,86 +64,98 @@ export async function sendNotification(params: CreateNotificationParams): Promis
     return;
   }
 
-  // 2. Guard: Deduplicate within 10 minutes (600,000 ms)
-  const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
-  const existingRecent = await Notification.findOne({
-    user: new Types.ObjectId(userId.toString()),
-    type,
-    ...(entityType ? { entityType } : {}),
-    ...(entityId ? { entityId } : {}),
-    createdAt: { $gte: tenMinutesAgo },
+  // Fetch user first to guarantee tenant context
+  const targetUser = await runWithTenantContext({ isBypassTenant: true }, async () => {
+    return User.findById(userId);
   });
 
-  if (existingRecent) {
-    // Already notified recently about this entity & type
+  if (!targetUser || !targetUser.active) {
     return;
   }
 
-  // 3. Fetch user & preferences
-  const user = await User.findById(userId);
-  if (!user || !user.active) {
-    return;
-  }
+  const userTenantId = targetUser.tenantId?.toString() || getCurrentTenantId();
 
-  const prefDoc = await NotificationPreference.findOne({ user: user._id });
-  const typePref = prefDoc?.preferences?.[type] || DEFAULT_PREFERENCES[type] || { inApp: true, email: false };
-
-  // 4. In-App Notification
-  if (typePref.inApp) {
-    await Notification.create({
-      user: user._id,
+  const executeSend = async () => {
+    // 2. Guard: Deduplicate within 10 minutes (600,000 ms)
+    const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
+    const existingRecent = await Notification.findOne({
+      user: new Types.ObjectId(userId.toString()),
       type,
-      title,
-      body,
-      link: link || '',
-      entityType: entityType || '',
-      entityId: entityId || '',
-      createdAt: new Date(),
+      ...(entityType ? { entityType } : {}),
+      ...(entityId ? { entityId } : {}),
+      createdAt: { $gte: tenMinutesAgo },
     });
-  }
 
-  // 5. Email Notification
-  if (typePref.email && process.env.RESEND_API_KEY && user.email) {
-    try {
-      const resend = new Resend(process.env.RESEND_API_KEY);
-      const emailFrom = process.env.EMAIL_FROM || 'Flowdesk CRM <notifications@resend.dev>';
-      const siteUrl = process.env.CLIENT_URL || 'http://localhost:5173';
-      const actionUrl = link ? `${siteUrl}${link}` : siteUrl;
-
-      await resend.emails.send({
-        from: emailFrom,
-        to: [user.email],
-        subject: `[Flowdesk] ${title}`,
-        html: `
-          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; color: #18181b;">
-            <div style="margin-bottom: 24px;">
-              <span style="font-size: 18px; font-weight: 700; color: #09090b; letter-spacing: -0.02em;">Flowdesk</span>
-            </div>
-            <div style="background: #ffffff; border: 1px solid #e4e4e7; border-radius: 12px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
-              <h2 style="margin: 0 0 12px; font-size: 16px; font-weight: 600; color: #09090b;">${title}</h2>
-              <p style="margin: 0 0 20px; font-size: 14px; line-height: 1.5; color: #52525b;">${body}</p>
-              ${
-                link
-                  ? `<a href="${actionUrl}" style="display: inline-block; background: #09090b; color: #ffffff; padding: 10px 18px; font-size: 13px; font-weight: 500; text-decoration: none; border-radius: 8px;">View Details</a>`
-                  : ''
-              }
-            </div>
-            <p style="margin-top: 24px; font-size: 12px; color: #a1a1aa; text-align: center;">
-              You received this notification according to your Flowdesk notification preferences.
-            </p>
-          </div>
-        `,
-        text: `${title}\n\n${body}\n\n${link ? `View: ${actionUrl}` : ''}`,
-      });
-    } catch (emailErr) {
-      console.warn('[NotificationService] Email delivery failed:', emailErr);
-      // Non-fatal
+    if (existingRecent) {
+      // Already notified recently about this entity & type
+      return;
     }
+
+    const prefDoc = await NotificationPreference.findOne({ user: targetUser._id });
+    const typePref = prefDoc?.preferences?.[type] || DEFAULT_PREFERENCES[type] || { inApp: true, email: false };
+
+    // 4. In-App Notification
+    if (typePref.inApp) {
+      await Notification.create({
+        user: targetUser._id,
+        type,
+        title,
+        body,
+        link: link || '',
+        entityType: entityType || '',
+        entityId: entityId || '',
+        createdAt: new Date(),
+      });
+    }
+
+    // 5. Email Notification
+    if (typePref.email && process.env.RESEND_API_KEY && targetUser.email) {
+      try {
+        const resend = new Resend(process.env.RESEND_API_KEY);
+        const emailFrom = process.env.EMAIL_FROM || 'Flowdesk CRM <notifications@resend.dev>';
+        const siteUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+        const actionUrl = link ? `${siteUrl}${link}` : siteUrl;
+
+        await resend.emails.send({
+          from: emailFrom,
+          to: [targetUser.email],
+          subject: `[Flowdesk] ${title}`,
+          html: `
+            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; color: #18181b;">
+              <div style="margin-bottom: 24px;">
+                <span style="font-size: 18px; font-weight: 700; color: #09090b; letter-spacing: -0.02em;">Flowdesk</span>
+              </div>
+              <div style="background: #ffffff; border: 1px solid #e4e4e7; border-radius: 12px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                <h2 style="margin: 0 0 12px; font-size: 16px; font-weight: 600; color: #09090b;">${title}</h2>
+                <p style="margin: 0 0 20px; font-size: 14px; line-height: 1.5; color: #52525b;">${body}</p>
+                ${
+                  link
+                    ? `<a href="${actionUrl}" style="display: inline-block; background: #09090b; color: #ffffff; padding: 10px 18px; font-size: 13px; font-weight: 500; text-decoration: none; border-radius: 8px;">View Details</a>`
+                    : ''
+                }
+              </div>
+              <p style="margin-top: 24px; font-size: 12px; color: #a1a1aa; text-align: center;">
+                You received this notification according to your Flowdesk notification preferences.
+              </p>
+            </div>
+          `,
+          text: `${title}\n\n${body}\n\n${link ? `View: ${actionUrl}` : ''}`,
+        });
+      } catch (emailErr) {
+        console.warn('[NotificationService] Email delivery failed:', emailErr);
+      }
+    }
+  };
+
+  if (userTenantId) {
+    await runWithTenantContext({ tenantId: userTenantId }, executeSend);
+  } else {
+    await executeSend();
   }
 }
 
 /**
- * Notifies all users with role 'admin' or 'manager' (e.g. for quote approval or workflow errors)
+ * Notifies all users with role 'admin' or 'manager'
  */
 export async function notifyManagersAndAdmins(params: Omit<CreateNotificationParams, 'userId'>): Promise<void> {
   const recipients = await User.find({

@@ -13,12 +13,14 @@ import { Deal } from '../models/Deal.js';
 import { Task } from '../models/Task.js';
 import { Contact } from '../models/Contact.js';
 import { Account } from '../models/Account.js';
+import { Ticket } from '../models/Ticket.js';
 import { EmailTemplate } from '../models/EmailTemplate.js';
 import { User } from '../models/User.js';
 import { eventBus, DomainEventPayload } from './eventBus.js';
 import { sendNotification, notifyAdmins, notifyManagersAndAdmins } from './notificationService.js';
 import { logActivity } from './activityHelper.js';
 import { resolveMergeFields, MergeContext } from './mergeFields.js';
+import { runWithTenantContext, getCurrentTenantId } from './tenantContext.js';
 
 // In-memory rate limiting and cooldown trackers
 // 1. Record cooldown: `${workflowId}:${entityType}:${entityId}` -> timestamp
@@ -168,6 +170,8 @@ async function fetchEntityRecord(type: string, id: string): Promise<any> {
       return await Contact.findById(id).populate('owner').populate('account').lean();
     case 'account':
       return await Account.findById(id).populate('owner').lean();
+    case 'ticket':
+      return await Ticket.findById(id).populate('assignee').populate('contact').populate('account').lean();
     default:
       return null;
   }
@@ -351,7 +355,7 @@ async function executeAction(
         body: `Created automatically by workflow "${workflow.name}"`,
         entityType: validEntityType,
         entityId,
-        createdBy: null as any,
+        createdBy: (assigneeId || (workflow as any).createdBy) as any,
       });
 
       return `Created task "${task.title}" due in ${days} days`;
@@ -491,8 +495,20 @@ async function executeAction(
           await Lead.findByIdAndUpdate(entityId, { owner: newOwnerId });
         } else if (entityType === 'deal') {
           await Deal.findByIdAndUpdate(entityId, { owner: newOwnerId });
+        } else if (entityType === 'ticket') {
+          await Ticket.findByIdAndUpdate(entityId, { assignee: newOwnerId });
         }
         return `Updated owner to ${targetValue}`;
+      } else if (targetField === 'ticket.status') {
+        if (entityType === 'ticket') {
+          await Ticket.findByIdAndUpdate(entityId, { status: targetValue });
+        }
+        return `Updated ticket status to ${targetValue}`;
+      } else if (targetField === 'ticket.priority') {
+        if (entityType === 'ticket') {
+          await Ticket.findByIdAndUpdate(entityId, { priority: targetValue });
+        }
+        return `Updated ticket priority to ${targetValue}`;
       } else {
         throw new Error(`Field update "${targetField}" is not whitelisted`);
       }
@@ -522,6 +538,8 @@ async function executeAction(
         await Lead.findByIdAndUpdate(entityId, { owner: newOwnerObjId });
       } else if (entityType === 'deal') {
         await Deal.findByIdAndUpdate(entityId, { owner: newOwnerObjId });
+      } else if (entityType === 'ticket') {
+        await Ticket.findByIdAndUpdate(entityId, { assignee: newOwnerObjId });
       }
 
       const validEntityType = (entityType === 'deal' || entityType === 'lead' || entityType === 'contact' || entityType === 'account') ? entityType : 'lead';
@@ -576,36 +594,54 @@ export async function handleWorkflowEvent(
     return;
   }
 
-  // Find enabled workflows matching this trigger type
-  const workflows = await Workflow.find({
-    enabled: true,
-    'trigger.type': eventType,
-  });
+  const entityType =
+    payload.entityType ||
+    (payload.ticketId ? 'ticket' : payload.dealId ? 'deal' : payload.leadId ? 'lead' : payload.taskId ? 'task' : 'general');
+  const entityId = payload.entityId || payload.ticketId || payload.dealId || payload.leadId || payload.taskId || '';
 
-  if (workflows.length === 0) return;
-
-  const entityType = payload.entityType || (payload.dealId ? 'deal' : payload.leadId ? 'lead' : payload.taskId ? 'task' : 'general');
-  const entityId = payload.entityId || payload.dealId || payload.leadId || payload.taskId || '';
-
-  if (!entityId) return;
-
-  const record = payload.record || (await fetchEntityRecord(entityType, entityId));
-  if (!record) return;
-
-  for (const workflow of workflows) {
-    // Specific trigger configuration checks (e.g. deal_stage_changed from -> to)
-    if (eventType === 'deal_stage_changed') {
-      const cfg = workflow.trigger.config || {};
-      if (cfg.fromStage && cfg.fromStage !== payload.fromStage) continue;
-      if (cfg.toStage && cfg.toStage !== payload.toStage) continue;
-    }
-
-    try {
-      await executeWorkflow(workflow, entityType, entityId, record, depth);
-    } catch (err) {
-      console.error(`[WorkflowEngine] Error executing workflow "${workflow.name}":`, err);
+  // Resolve tenantId for isolated execution
+  let targetTenantId = payload.tenantId || getCurrentTenantId();
+  if (!targetTenantId && entityId) {
+    const rawRecord = await runWithTenantContext({ isBypassTenant: true }, async () => {
+      return fetchEntityRecord(entityType, entityId);
+    });
+    if (rawRecord && (rawRecord as any).tenantId) {
+      targetTenantId = (rawRecord as any).tenantId.toString();
     }
   }
+
+  if (!targetTenantId) {
+    return;
+  }
+
+  await runWithTenantContext({ tenantId: targetTenantId }, async () => {
+    // Find enabled workflows matching this trigger type scoped to tenant
+    const workflows = await Workflow.find({
+      enabled: true,
+      'trigger.type': eventType,
+    });
+
+    if (workflows.length === 0) return;
+    if (!entityId) return;
+
+    const record = payload.record || (await fetchEntityRecord(entityType, entityId));
+    if (!record) return;
+
+    for (const workflow of workflows) {
+      // Specific trigger configuration checks (e.g. deal_stage_changed from -> to)
+      if (eventType === 'deal_stage_changed') {
+        const cfg = workflow.trigger.config || {};
+        if (cfg.fromStage && cfg.fromStage !== payload.fromStage) continue;
+        if (cfg.toStage && cfg.toStage !== payload.toStage) continue;
+      }
+
+      try {
+        await executeWorkflow(workflow, entityType, entityId, record, depth);
+      } catch (err) {
+        console.error(`[WorkflowEngine] Error executing workflow "${workflow.name}":`, err);
+      }
+    }
+  });
 }
 
 /**
@@ -623,6 +659,12 @@ export function registerWorkflowListeners(): void {
     'quote_declined',
     'invoice_overdue',
     'invoice_paid',
+    'ticket_created',
+    'ticket_assigned',
+    'ticket_sla_warning',
+    'ticket_sla_breached',
+    'ticket_resolved',
+    'deal_risk_high',
   ];
 
   for (const ev of events) {

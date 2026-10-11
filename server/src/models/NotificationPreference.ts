@@ -1,5 +1,6 @@
 import mongoose, { Document, Schema, Types } from 'mongoose';
 import { NotificationType } from './Notification.js';
+import { tenantPlugin } from '../utils/tenantPlugin.js';
 
 export interface ITypePreference {
   inApp: boolean;
@@ -7,6 +8,8 @@ export interface ITypePreference {
 }
 
 export interface INotificationPreference extends Document {
+  _id: Types.ObjectId;
+  tenantId: Types.ObjectId;
   user: Types.ObjectId;
   preferences: Record<string, ITypePreference>;
   createdAt: Date;
@@ -30,6 +33,12 @@ export const DEFAULT_PREFERENCES: Record<NotificationType, ITypePreference> = {
   invoice_overdue: { inApp: true, email: true },
   workflow_disabled: { inApp: true, email: false },
   import_finished: { inApp: true, email: false },
+  ticket_assigned: { inApp: true, email: true },
+  ticket_sla_warning: { inApp: true, email: true },
+  ticket_sla_breached: { inApp: true, email: true },
+  deal_risk_high: { inApp: true, email: false },
+  lead_assigned: { inApp: true, email: true },
+  lead_repeat_inquiry: { inApp: true, email: true },
   general: { inApp: true, email: false },
 };
 
@@ -39,7 +48,6 @@ const NotificationPreferenceSchema = new Schema<INotificationPreference>(
       type: Schema.Types.ObjectId,
       ref: 'User',
       required: true,
-      unique: true,
       index: true,
     },
     preferences: {
@@ -51,6 +59,9 @@ const NotificationPreferenceSchema = new Schema<INotificationPreference>(
     timestamps: true,
   }
 );
+
+NotificationPreferenceSchema.index({ tenantId: 1, user: 1 }, { unique: true });
+NotificationPreferenceSchema.plugin(tenantPlugin);
 
 export const NotificationPreference = mongoose.model<INotificationPreference>(
   'NotificationPreference',

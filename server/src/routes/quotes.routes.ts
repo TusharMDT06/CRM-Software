@@ -7,10 +7,13 @@ import { Invoice } from '../models/Invoice.js';
 import { Deal } from '../models/Deal.js';
 import { Account } from '../models/Account.js';
 import { Contact } from '../models/Contact.js';
+import { Tenant } from '../models/Tenant.js';
 import { CompanySettings, getCompanySettings } from '../models/CompanySettings.js';
 import { getNextDocumentNumber } from '../models/Counter.js';
 import { authenticate } from '../middleware/auth.js';
 import { validateBody } from '../middleware/validate.js';
+import { requireWithinRecordLimit } from '../middleware/planLimits.js';
+import { runWithTenantContext } from '../utils/tenantContext.js';
 import {
   createQuoteSchema,
   updateQuoteSchema,
@@ -68,95 +71,108 @@ function buildQuoteQuery(user: any, queryParams: any): FilterQuery<any> {
 quotesRouter.get('/public/:publicToken', publicQuoteLimiter, async (req, res: Response) => {
   try {
     const { publicToken } = req.params;
-    const quote = await Quote.findOne({ publicToken })
-      .populate('account', 'name industry city state gstin')
-      .populate('contact', 'firstName lastName email phone')
-      .populate('deal', 'title amount')
-      .populate('owner', 'name email');
+    const quote = await runWithTenantContext({ isBypassTenant: true }, async () => {
+      return Quote.findOne({ publicToken })
+        .populate('account', 'name industry city state gstin')
+        .populate('contact', 'firstName lastName email phone')
+        .populate('deal', 'title amount')
+        .populate('owner', 'name email');
+    });
 
     if (!quote) {
       res.status(404).json({ message: 'Quote not found or invalid link' });
       return;
     }
 
-    const company = await getCompanySettings();
-
-    // Check expiry
-    const now = new Date();
-    if (
-      quote.status !== 'accepted' &&
-      quote.status !== 'declined' &&
-      new Date(quote.validUntil) < now &&
-      quote.status !== 'expired'
-    ) {
-      quote.status = 'expired';
-      await quote.save();
+    const tenant = await Tenant.findById(quote.tenantId);
+    if (!tenant || tenant.status === 'suspended') {
+      res.status(403).json({
+        message: 'This quotation is temporarily unavailable because the organization account has been suspended.',
+      });
+      return;
     }
 
-    // If first time viewed by recipient (status was 'sent'), mark as 'viewed'
-    if (quote.status === 'sent') {
-      quote.status = 'viewed';
-      quote.viewedAt = new Date();
-      await quote.save();
+    return await runWithTenantContext({ tenantId: quote.tenantId.toString() }, async () => {
+      const company = await getCompanySettings();
 
-      // Log activity
-      await logActivity({
-        type: 'meeting', // system event indicator
-        subject: `Quote ${quote.number} viewed by client`,
-        body: `Client opened quote ${quote.number} online.`,
-        entityType: 'deal',
-        entityId: quote.deal._id,
-        createdBy: quote.owner._id,
-      });
+      // Check expiry
+      const now = new Date();
+      if (
+        quote.status !== 'accepted' &&
+        quote.status !== 'declined' &&
+        new Date(quote.validUntil) < now &&
+        quote.status !== 'expired'
+      ) {
+        quote.status = 'expired';
+        await quote.save();
+      }
 
-      // Emit event for workflows and notifications
-      eventBus.emit('quote_viewed', {
-        quoteId: quote._id,
-        quoteNumber: quote.number,
-        ownerId: (quote.owner as any)._id,
-        dealId: (quote.deal as any)._id,
-        accountId: (quote.account as any)._id,
-        total: quote.total,
-      });
-    }
+      // If first time viewed by recipient (status was 'sent'), mark as 'viewed'
+      if (quote.status === 'sent') {
+        quote.status = 'viewed';
+        quote.viewedAt = new Date();
+        await quote.save();
 
-    res.json({
-      quote: {
-        _id: quote._id,
-        number: quote.number,
-        status: quote.status,
-        items: quote.items,
-        subtotal: quote.subtotal,
-        discountTotal: quote.discountTotal,
-        taxTotal: quote.taxTotal,
-        cgstTotal: quote.cgstTotal,
-        sgstTotal: quote.sgstTotal,
-        igstTotal: quote.igstTotal,
-        total: quote.total,
-        taxMode: quote.taxMode,
-        validUntil: quote.validUntil,
-        notes: quote.notes,
-        terms: quote.terms,
-        account: quote.account,
-        contact: quote.contact,
-        deal: quote.deal,
-        owner: {
-          name: (quote.owner as any)?.name,
-          email: (quote.owner as any)?.email,
+        // Log activity
+        await logActivity({
+          type: 'meeting', // system event indicator
+          subject: `Quote ${quote.number} viewed by client`,
+          body: `Client opened quote ${quote.number} online.`,
+          entityType: 'deal',
+          entityId: quote.deal._id,
+          createdBy: quote.owner._id,
+        });
+
+        // Emit event for workflows and notifications
+        eventBus.emit('quote_viewed', {
+          quoteId: quote._id,
+          quoteNumber: quote.number,
+          ownerId: (quote.owner as any)._id,
+          dealId: (quote.deal as any)._id,
+          accountId: (quote.account as any)._id,
+          total: quote.total,
+          tenantId: quote.tenantId.toString(),
+        });
+      }
+
+      res.json({
+        quote: {
+          _id: quote._id,
+          number: quote.number,
+          status: quote.status,
+          items: quote.items,
+          subtotal: quote.subtotal,
+          discountTotal: quote.discountTotal,
+          taxTotal: quote.taxTotal,
+          cgstTotal: quote.cgstTotal,
+          sgstTotal: quote.sgstTotal,
+          igstTotal: quote.igstTotal,
+          total: quote.total,
+          taxMode: quote.taxMode,
+          validUntil: quote.validUntil,
+          notes: quote.notes,
+          terms: quote.terms,
+          account: quote.account,
+          contact: quote.contact,
+          deal: quote.deal,
+          owner: {
+            name: (quote.owner as any)?.name,
+            email: (quote.owner as any)?.email,
+          },
+          viewedAt: quote.viewedAt,
+          respondedAt: quote.respondedAt,
+          responseReason: quote.responseReason,
         },
-        viewedAt: quote.viewedAt,
-        respondedAt: quote.respondedAt,
-        responseReason: quote.responseReason,
-      },
-      company: {
-        legalName: company.legalName,
-        address: company.address,
-        state: company.state,
-        gstin: company.gstin,
-        email: company.email,
-        phone: company.phone,
-        bankDetails: company.bankDetails,
-      },
+        company: {
+          legalName: company.legalName,
+          address: company.address,
+          state: company.state,
+          gstin: company.gstin,
+          email: company.email,
+          phone: company.phone,
+          bankDetails: company.bankDetails,
+        },
+      });
     });
   } catch (error: any) {
     res.status(500).json({ message: error.message || 'Failed to load public quote' });
@@ -167,23 +183,35 @@ quotesRouter.get('/public/:publicToken', publicQuoteLimiter, async (req, res: Re
 quotesRouter.get('/public/:publicToken/pdf', publicQuoteLimiter, async (req, res: Response) => {
   try {
     const { publicToken } = req.params;
-    const quote = await Quote.findOne({ publicToken })
-      .populate('account')
-      .populate('contact')
-      .populate('deal')
-      .populate('owner');
+    const quote = await runWithTenantContext({ isBypassTenant: true }, async () => {
+      return Quote.findOne({ publicToken })
+        .populate('account')
+        .populate('contact')
+        .populate('deal')
+        .populate('owner');
+    });
 
     if (!quote) {
       res.status(404).json({ message: 'Quote not found' });
       return;
     }
 
-    const company = await getCompanySettings();
-    const pdfBuffer = await generateDocumentPDF({ type: 'quote', doc: quote, company });
+    const tenant = await Tenant.findById(quote.tenantId);
+    if (!tenant || tenant.status === 'suspended') {
+      res.status(403).json({
+        message: 'This quotation PDF is unavailable because the organization account has been suspended.',
+      });
+      return;
+    }
 
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `inline; filename="${quote.number}.pdf"`);
-    res.send(pdfBuffer);
+    return await runWithTenantContext({ tenantId: quote.tenantId.toString() }, async () => {
+      const company = await getCompanySettings();
+      const pdfBuffer = await generateDocumentPDF({ type: 'quote', doc: quote, company });
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `inline; filename="${quote.number}.pdf"`);
+      res.send(pdfBuffer);
+    });
   } catch (error: any) {
     res.status(500).json({ message: error.message || 'Failed to generate PDF' });
   }
@@ -200,63 +228,76 @@ quotesRouter.post(['/public/:publicToken/respond', '/public/:publicToken/action'
       return;
     }
 
-    const quote = await Quote.findOne({ publicToken })
-      .populate('deal')
-      .populate('account')
-      .populate('contact')
-      .populate('owner');
+    const quote = await runWithTenantContext({ isBypassTenant: true }, async () => {
+      return Quote.findOne({ publicToken })
+        .populate('deal')
+        .populate('account')
+        .populate('contact')
+        .populate('owner');
+    });
 
     if (!quote) {
       res.status(404).json({ message: 'Quote not found' });
       return;
     }
 
-    if (quote.status === 'accepted' || quote.status === 'declined') {
-      res.status(400).json({ message: `This quote has already been ${quote.status}` });
+    const tenant = await Tenant.findById(quote.tenantId);
+    if (!tenant || tenant.status === 'suspended') {
+      res.status(403).json({
+        message: 'Action unavailable because the organization account has been suspended.',
+      });
       return;
     }
 
-    if (quote.status === 'expired' || new Date(quote.validUntil) < new Date()) {
-      res.status(400).json({ message: 'This quote has expired and cannot be accepted' });
-      return;
-    }
+    return await runWithTenantContext({ tenantId: quote.tenantId.toString() }, async () => {
+      if (quote.status === 'accepted' || quote.status === 'declined') {
+        res.status(400).json({ message: `This quote has already been ${quote.status}` });
+        return;
+      }
 
-    quote.status = action === 'accept' ? 'accepted' : 'declined';
-    quote.respondedAt = new Date();
-    if (action === 'decline' && reason) {
-      quote.responseReason = String(reason).trim();
-    }
-    await quote.save();
+      if (quote.status === 'expired' || new Date(quote.validUntil) < new Date()) {
+        res.status(400).json({ message: 'This quote has expired and cannot be accepted' });
+        return;
+      }
 
-    const eventName = action === 'accept' ? 'quote_accepted' : 'quote_declined';
+      quote.status = action === 'accept' ? 'accepted' : 'declined';
+      quote.respondedAt = new Date();
+      if (action === 'decline' && reason) {
+        quote.responseReason = String(reason).trim();
+      }
+      await quote.save();
 
-    // Log timeline activity
-    await logActivity({
-      type: 'note',
-      subject: `Quote ${quote.number} ${action === 'accept' ? 'Accepted' : 'Declined'} by Client`,
-      body:
-        action === 'accept'
-          ? `Client formally accepted quote ${quote.number} (Total: ₹${paiseToRupees(quote.total).toLocaleString('en-IN')}).`
-          : `Client declined quote ${quote.number}. Reason: ${quote.responseReason || 'None provided'}.`,
-      entityType: 'deal',
-      entityId: quote.deal._id,
-      createdBy: quote.owner._id,
-    });
+      const eventName = action === 'accept' ? 'quote_accepted' : 'quote_declined';
 
-    // Emit event for notifications and automations
-    eventBus.emit(eventName, {
-      quoteId: quote._id,
-      quoteNumber: quote.number,
-      ownerId: (quote.owner as any)._id,
-      dealId: (quote.deal as any)._id,
-      accountId: (quote.account as any)._id,
-      total: quote.total,
-      reason: quote.responseReason,
-    });
+      // Log timeline activity
+      await logActivity({
+        type: 'note',
+        subject: `Quote ${quote.number} ${action === 'accept' ? 'Accepted' : 'Declined'} by Client`,
+        body:
+          action === 'accept'
+            ? `Client formally accepted quote ${quote.number} (Total: ₹${paiseToRupees(quote.total).toLocaleString('en-IN')}).`
+            : `Client declined quote ${quote.number}. Reason: ${quote.responseReason || 'None provided'}.`,
+        entityType: 'deal',
+        entityId: quote.deal._id,
+        createdBy: quote.owner._id,
+      });
 
-    res.json({
-      message: `Quote successfully ${quote.status}`,
-      status: quote.status,
+      // Emit event for notifications and automations
+      eventBus.emit(eventName, {
+        quoteId: quote._id,
+        quoteNumber: quote.number,
+        ownerId: (quote.owner as any)._id,
+        dealId: (quote.deal as any)._id,
+        accountId: (quote.account as any)._id,
+        total: quote.total,
+        reason: quote.responseReason,
+        tenantId: quote.tenantId.toString(),
+      });
+
+      res.json({
+        message: `Quote successfully ${quote.status}`,
+        status: quote.status,
+      });
     });
   } catch (error: any) {
     res.status(500).json({ message: error.message || 'Failed to submit response' });
@@ -332,7 +373,7 @@ quotesRouter.get('/:id', async (req: AuthRequest, res: Response) => {
 });
 
 // POST /quotes
-quotesRouter.post('/', validateBody(createQuoteSchema), async (req: AuthRequest, res: Response) => {
+quotesRouter.post('/', requireWithinRecordLimit, validateBody(createQuoteSchema), async (req: AuthRequest, res: Response) => {
   try {
     const user = req.user!;
     const { items, taxMode, validUntil, ...body } = req.body;

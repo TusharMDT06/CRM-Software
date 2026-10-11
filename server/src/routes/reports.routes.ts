@@ -6,6 +6,7 @@ import { Task } from '../models/Task.js';
 import { User } from '../models/User.js';
 import { Invoice } from '../models/Invoice.js';
 import { Payment } from '../models/Payment.js';
+import { Ticket } from '../models/Ticket.js';
 import { authenticate } from '../middleware/auth.js';
 import { AuthRequest } from '../types/index.js';
 
@@ -605,3 +606,154 @@ reportsRouter.get('/invoices', async (req: AuthRequest, res: Response) => {
     res.status(500).json({ message: error.message || 'Failed to generate invoice reports' });
   }
 });
+
+// GET /reports/support
+reportsRouter.get('/support', async (req: AuthRequest, res: Response) => {
+  try {
+    const user = req.user!;
+    const { from, to } = parseDateRange(req.query.from as string, req.query.to as string);
+
+    const ticketMatch: any = {
+      createdAt: { $gte: from, $lte: to },
+    };
+
+    if (user.role === 'sales') {
+      ticketMatch.assignee = new Types.ObjectId(user._id);
+    } else if (req.query.assignee && Types.ObjectId.isValid(req.query.assignee as string)) {
+      ticketMatch.assignee = new Types.ObjectId(req.query.assignee as string);
+    }
+
+    const tickets = await Ticket.find(ticketMatch).populate('assignee', 'name email');
+
+    // 1. Status breakdown
+    const statusCounts: Record<string, number> = {
+      new: 0,
+      open: 0,
+      pending: 0,
+      resolved: 0,
+      closed: 0,
+    };
+
+    // 2. Priority breakdown
+    const priorityCounts: Record<string, number> = {
+      low: 0,
+      medium: 0,
+      high: 0,
+      urgent: 0,
+    };
+
+    // 3. Channel breakdown
+    const channelCounts: Record<string, number> = {
+      manual: 0,
+      portal: 0,
+      email: 0,
+      whatsapp: 0,
+    };
+
+    let totalResponseMinutes = 0;
+    let responseCount = 0;
+    let totalResolutionMinutes = 0;
+    let resolutionCount = 0;
+    let resolvedCount = 0;
+    let slaMetCount = 0;
+
+    // Agent performance tracking
+    const agentStats = new Map<
+      string,
+      {
+        name: string;
+        email: string;
+        assigned: number;
+        resolved: number;
+        totalResMin: number;
+        breached: number;
+      }
+    >();
+
+    tickets.forEach((t) => {
+      // Status
+      if (statusCounts[t.status] !== undefined) statusCounts[t.status]++;
+      // Priority
+      if (priorityCounts[t.priority] !== undefined) priorityCounts[t.priority]++;
+      // Channel
+      if (channelCounts[t.channel] !== undefined) channelCounts[t.channel]++;
+
+      // First response time
+      if (t.firstResponseAt) {
+        const diffMs = t.firstResponseAt.getTime() - t.createdAt.getTime();
+        totalResponseMinutes += Math.max(1, Math.round(diffMs / 60000));
+        responseCount++;
+      }
+
+      // Resolution time & SLA
+      if (t.status === 'resolved' || t.status === 'closed') {
+        resolvedCount++;
+        const isBreached = t.slaBreached?.firstResponse || t.slaBreached?.resolution;
+        if (!isBreached) {
+          slaMetCount++;
+        }
+        if (t.resolvedAt) {
+          const resMs = t.resolvedAt.getTime() - t.createdAt.getTime();
+          totalResolutionMinutes += Math.max(1, Math.round(resMs / 60000));
+          resolutionCount++;
+        }
+      }
+
+      // Agent stats
+      const agent = t.assignee as any;
+      if (agent && agent._id) {
+        const aid = agent._id.toString();
+        const stat = agentStats.get(aid) || {
+          name: agent.name || 'Agent',
+          email: agent.email || '',
+          assigned: 0,
+          resolved: 0,
+          totalResMin: 0,
+          breached: 0,
+        };
+        stat.assigned++;
+        if (t.status === 'resolved' || t.status === 'closed') {
+          stat.resolved++;
+          if (t.resolvedAt) {
+            stat.totalResMin += Math.round((t.resolvedAt.getTime() - t.createdAt.getTime()) / 60000);
+          }
+        }
+        if (t.slaBreached?.firstResponse || t.slaBreached?.resolution) {
+          stat.breached++;
+        }
+        agentStats.set(aid, stat);
+      }
+    });
+
+    const avgFirstResponseHours = responseCount > 0 ? (totalResponseMinutes / responseCount / 60).toFixed(1) : '0';
+    const avgResolutionHours = resolutionCount > 0 ? (totalResolutionMinutes / resolutionCount / 60).toFixed(1) : '0';
+    const slaCompliancePercent =
+      resolvedCount > 0 ? Math.round((slaMetCount / resolvedCount) * 100) : 100;
+
+    const agents = Array.from(agentStats.entries()).map(([id, s]) => ({
+      id,
+      name: s.name,
+      email: s.email,
+      assigned: s.assigned,
+      resolved: s.resolved,
+      avgResolutionHours: s.resolved > 0 ? (s.totalResMin / s.resolved / 60).toFixed(1) : '—',
+      compliancePercent: s.assigned > 0 ? Math.round(((s.assigned - s.breached) / s.assigned) * 100) : 100,
+    }));
+
+    res.json({
+      totalTickets: tickets.length,
+      openTickets: statusCounts.new + statusCounts.open + statusCounts.pending,
+      resolvedTickets: resolvedCount,
+      slaCompliancePercent,
+      avgFirstResponseHours,
+      avgResolutionHours,
+      statusCounts,
+      priorityCounts,
+      channelCounts,
+      agents,
+    });
+  } catch (error: any) {
+    res.status(500).json({ message: error.message || 'Failed to generate support reports' });
+  }
+});
+

@@ -1,4 +1,5 @@
 import mongoose, { Document, Schema, Types } from 'mongoose';
+import { tenantPlugin } from '../utils/tenantPlugin.js';
 
 export interface IWorkflowRunStep {
   action: string;
@@ -7,6 +8,8 @@ export interface IWorkflowRunStep {
 }
 
 export interface IWorkflowRun extends Document {
+  _id: Types.ObjectId;
+  tenantId: Types.ObjectId;
   workflow: Types.ObjectId;
   triggerEntity: {
     type: string;
@@ -69,6 +72,7 @@ const WorkflowRunSchema = new Schema<IWorkflowRun>(
   }
 );
 
-WorkflowRunSchema.index({ workflow: 1, createdAt: -1 });
+WorkflowRunSchema.index({ tenantId: 1, workflow: 1, createdAt: -1 });
+WorkflowRunSchema.plugin(tenantPlugin);
 
 export const WorkflowRun = mongoose.model<IWorkflowRun>('WorkflowRun', WorkflowRunSchema);

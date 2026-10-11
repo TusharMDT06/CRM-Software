@@ -27,6 +27,8 @@ export const TeamPage: React.FC = () => {
   const [resetModalOpen, setResetModalOpen] = useState(false);
   const [newPassword, setNewPassword] = useState('');
 
+  const [inviteViaEmail, setInviteViaEmail] = useState(true);
+
   // Form State
   const [formData, setFormData] = useState({
     name: '',
@@ -60,14 +62,23 @@ export const TeamPage: React.FC = () => {
         const res = await api.patch(`/users/${selectedUser._id}`, payload);
         return res.data;
       } else {
-        const res = await api.post('/users', data);
-        return res.data;
+        if (inviteViaEmail) {
+          const res = await api.post('/users/invite', {
+            name: data.name,
+            email: data.email,
+            role: data.role,
+          });
+          return res.data;
+        } else {
+          const res = await api.post('/users', data);
+          return res.data;
+        }
       }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
       queryClient.invalidateQueries({ queryKey: ['users-list'] });
-      success(selectedUser ? 'User updated successfully' : 'Team member invited successfully');
+      success(selectedUser ? 'User updated successfully' : 'Team member invitation sent successfully');
       setDrawerOpen(false);
     },
     onError: (err: any) => {
@@ -346,18 +357,35 @@ export const TeamPage: React.FC = () => {
           </div>
 
           {!selectedUser ? (
-            <div>
-              <label className="block text-xs font-medium text-foreground mb-1">
-                Initial Password *
-              </label>
-              <input
-                type="password"
-                required
-                value={formData.password}
-                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                placeholder="Min 6 characters"
-                className="w-full px-3 py-2 text-sm bg-card border border-border rounded-xl text-foreground focus:outline-none focus:ring-1 focus:ring-black dark:focus:ring-white"
-              />
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 pt-1">
+                <input
+                  type="checkbox"
+                  id="inviteViaEmail"
+                  checked={inviteViaEmail}
+                  onChange={(e) => setInviteViaEmail(e.target.checked)}
+                  className="w-4 h-4 rounded border-border text-black focus:ring-0"
+                />
+                <label htmlFor="inviteViaEmail" className="text-xs font-semibold text-foreground cursor-pointer">
+                  Send email invitation (7-day single use token)
+                </label>
+              </div>
+
+              {!inviteViaEmail && (
+                <div>
+                  <label className="block text-xs font-medium text-foreground mb-1">
+                    Initial Password *
+                  </label>
+                  <input
+                    type="password"
+                    required={!inviteViaEmail}
+                    value={formData.password}
+                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                    placeholder="Min 6 characters"
+                    className="w-full px-3 py-2 text-sm bg-card border border-border rounded-xl text-foreground focus:outline-none focus:ring-1 focus:ring-black dark:focus:ring-white"
+                  />
+                </div>
+              )}
             </div>
           ) : (
             <div>

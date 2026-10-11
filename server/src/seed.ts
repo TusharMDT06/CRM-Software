@@ -21,7 +21,9 @@ import { Workflow } from './models/Workflow.js';
 import { WorkflowRun } from './models/WorkflowRun.js';
 import { Notification } from './models/Notification.js';
 import { NotificationPreference } from './models/NotificationPreference.js';
+import { Tenant, DEFAULT_PLAN_LIMITS } from './models/Tenant.js';
 import { calculateDocumentTotals } from './utils/moneyHelper.js';
+import { runWithTenantContext } from './utils/tenantContext.js';
 
 dotenv.config();
 
@@ -29,72 +31,97 @@ export async function runSeed() {
   console.log('[Seed] Starting database seeding...');
   await connectDB();
 
-  // Clear existing collections
-  await Promise.all([
-    User.deleteMany({}),
-    Account.deleteMany({}),
-    Contact.deleteMany({}),
-    Deal.deleteMany({}),
-    Lead.deleteMany({}),
-    Task.deleteMany({}),
-    Activity.deleteMany({}),
-    EmailTemplate.deleteMany({}),
-    FieldDefinition.deleteMany({}),
-    Counter.deleteMany({}),
-    Product.deleteMany({}),
-    CompanySettings.deleteMany({}),
-    Quote.deleteMany({}),
-    Invoice.deleteMany({}),
-    Payment.deleteMany({}),
-    Workflow.deleteMany({}),
-    WorkflowRun.deleteMany({}),
-    Notification.deleteMany({}),
-    NotificationPreference.deleteMany({}),
-  ]);
-  console.log('[Seed] Cleared existing data.');
+  const defaultTenant = await runWithTenantContext({ isBypassTenant: true }, async () => {
+    // Clear existing collections
+    await Promise.all([
+      User.deleteMany({}),
+      Account.deleteMany({}),
+      Contact.deleteMany({}),
+      Deal.deleteMany({}),
+      Lead.deleteMany({}),
+      Task.deleteMany({}),
+      Activity.deleteMany({}),
+      EmailTemplate.deleteMany({}),
+      FieldDefinition.deleteMany({}),
+      Counter.deleteMany({}),
+      Product.deleteMany({}),
+      CompanySettings.deleteMany({}),
+      Quote.deleteMany({}),
+      Invoice.deleteMany({}),
+      Payment.deleteMany({}),
+      Workflow.deleteMany({}),
+      WorkflowRun.deleteMany({}),
+      Notification.deleteMany({}),
+      NotificationPreference.deleteMany({}),
+    ]);
+    console.log('[Seed] Cleared existing data.');
 
-  // 1. Create Users
-  const passwordHash = await bcrypt.hash('Password@123', 10);
+    let tenant = await Tenant.findOne({ slug: 'default' });
+    if (!tenant) {
+      tenant = await Tenant.create({
+        name: 'Flowdesk Technologies',
+        slug: 'default',
+        status: 'active',
+        plan: 'pro',
+        limits: { ...DEFAULT_PLAN_LIMITS.pro },
+      });
+    }
+    return tenant;
+  });
 
-  const [adminUser, managerUser, salesUser, salesUser2, disabledUser] = await Promise.all([
-    User.create({
-      name: 'Aarav Sharma',
-      email: 'admin@crm.test',
-      passwordHash,
-      role: 'admin',
-      active: true,
-    }),
-    User.create({
-      name: 'Priya Patel',
-      email: 'manager@crm.test',
-      passwordHash,
-      role: 'manager',
-      active: true,
-    }),
-    User.create({
-      name: 'Rohan Mehta',
-      email: 'sales@crm.test',
-      passwordHash,
-      role: 'sales',
-      active: true,
-    }),
-    User.create({
-      name: 'Ananya Iyer',
-      email: 'sales2@crm.test',
-      passwordHash,
-      role: 'sales',
-      active: true,
-    }),
-    User.create({
-      name: 'Vikram Malhotra',
-      email: 'disabled@crm.test',
-      passwordHash,
-      role: 'sales',
-      active: false,
-    }),
-  ]);
+  await runWithTenantContext({ tenantId: defaultTenant._id.toString() }, async () => {
+    // 1. Create Users
+    const passwordHash = await bcrypt.hash('Password@123', 10);
 
-  console.log('[Seed] Created users: admin, manager, sales, sales2, disabled.');
+    const [adminUser, managerUser, salesUser, salesUser2, disabledUser] = await Promise.all([
+      User.create({
+        name: 'Aarav Sharma',
+        email: 'admin@crm.test',
+        passwordHash,
+        role: 'admin',
+        active: true,
+        isVerified: true,
+        tenantId: defaultTenant._id,
+      }),
+      User.create({
+        name: 'Priya Patel',
+        email: 'manager@crm.test',
+        passwordHash,
+        role: 'manager',
+        active: true,
+        isVerified: true,
+        tenantId: defaultTenant._id,
+      }),
+      User.create({
+        name: 'Rohan Mehta',
+        email: 'sales@crm.test',
+        passwordHash,
+        role: 'sales',
+        active: true,
+        isVerified: true,
+        tenantId: defaultTenant._id,
+      }),
+      User.create({
+        name: 'Ananya Iyer',
+        email: 'sales2@crm.test',
+        passwordHash,
+        role: 'sales',
+        active: true,
+        isVerified: true,
+        tenantId: defaultTenant._id,
+      }),
+      User.create({
+        name: 'Vikram Malhotra',
+        email: 'disabled@crm.test',
+        passwordHash,
+        role: 'sales',
+        active: false,
+        isVerified: true,
+        tenantId: defaultTenant._id,
+      }),
+    ]);
+
+    console.log('[Seed] Created users: admin, manager, sales, sales2, disabled.');
 
   // 2. Custom Field Definitions (3 per entity)
   const customFieldsData = [
@@ -1809,6 +1836,7 @@ Best regards,
     });
   }
   console.log('[Seed] Created Notification Preferences for users.');
+  });
 
   console.log('[Seed] Seeding completed successfully!');
   console.log('----------------------------------------------------');

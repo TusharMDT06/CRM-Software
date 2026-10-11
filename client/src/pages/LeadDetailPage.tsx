@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -15,6 +15,10 @@ import {
   Clock,
   Trash2,
   FileText,
+  Sparkles,
+  Target,
+  ShieldCheck,
+  Radio,
 } from 'lucide-react';
 import { Lead, Task, User } from '../types/index.js';
 import { api } from '../api/client.js';
@@ -31,6 +35,8 @@ import { ComposeEmailModal } from '../components/email/ComposeEmailModal.js';
 import { PageTransition } from '../components/motion/PageTransition.js';
 import { Reveal } from '../components/motion/Reveal.js';
 import { HistoryTab } from '../components/common/HistoryTab.js';
+import { RecordSummaryModal } from '../components/ai/RecordSummaryModal.js';
+import { explainScoreWithAi, getAiStatus } from '../api/ai.js';
 
 export const LeadDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -45,6 +51,33 @@ export const LeadDetailPage: React.FC = () => {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [taskModalOpen, setTaskModalOpen] = useState(false);
   const [isConverting, setIsConverting] = useState(false);
+  const [summaryModalOpen, setSummaryModalOpen] = useState(false);
+  const [explainingScore, setExplainingScore] = useState(false);
+  const [aiAvailable, setAiAvailable] = useState(false);
+
+  useEffect(() => {
+    getAiStatus()
+      .then((status) => {
+        if (status.isConfigured && status.aiEnabled) {
+          setAiAvailable(true);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleExplainScore = async () => {
+    if (!id || explainingScore) return;
+    setExplainingScore(true);
+    try {
+      await explainScoreWithAi('lead', id);
+      success('AI explanation generated for lead score');
+      queryClient.invalidateQueries({ queryKey: ['lead', id] });
+    } catch (err: any) {
+      error(err.message || 'Failed to generate explanation');
+    } finally {
+      setExplainingScore(false);
+    }
+  };
 
   // Quick Task form state
   const [taskTitle, setTaskTitle] = useState('');
@@ -259,6 +292,18 @@ export const LeadDetailPage: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
+            {aiAvailable && (
+              <Button
+                variant="secondary"
+                size="md"
+                onClick={() => setSummaryModalOpen(true)}
+                className="border-primary/30 text-primary hover:bg-primary/10"
+              >
+                <Sparkles className="w-4 h-4 text-primary" />
+                <span>Summarise</span>
+              </Button>
+            )}
+
             <Button variant="secondary" size="md" onClick={() => setDrawerOpen(true)}>
               <Edit className="w-4 h-4" />
               <span>Edit</span>
@@ -332,6 +377,64 @@ export const LeadDetailPage: React.FC = () => {
               </button>
             </div>
           </div>
+
+          {/* Lead Score Card */}
+          {lead.aiScore && (
+            <div className="bg-card border border-border rounded-card p-4 shadow-sm space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <Sparkles className="w-4 h-4 text-primary" />
+                  <span className="text-xs font-semibold uppercase tracking-wider text-muted">
+                    Lead Score
+                  </span>
+                </div>
+                <span
+                  className={`px-2.5 py-0.5 rounded-full text-xs font-semibold uppercase ${
+                    lead.aiScore.grade === 'hot'
+                      ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400'
+                      : lead.aiScore.grade === 'warm'
+                      ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-400'
+                      : 'bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-400'
+                  }`}
+                >
+                  {lead.aiScore.grade} • {lead.aiScore.score}/100
+                </span>
+              </div>
+
+              {lead.aiScore.reasons && lead.aiScore.reasons.length > 0 && (
+                <ul className="text-xs space-y-1 text-muted">
+                  {lead.aiScore.reasons.map((r, i) => (
+                    <li key={i} className="flex items-start gap-1.5">
+                      <span className="text-primary mt-0.5">•</span>
+                      <span>{r}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              {lead.aiScore.explanation && (
+                <div className="text-xs bg-muted/20 border border-border/50 rounded-lg p-2.5 text-foreground leading-relaxed">
+                  <div className="text-[10px] uppercase font-semibold text-muted mb-1 flex items-center gap-1">
+                    <Sparkles className="w-3 h-3 text-primary" /> AI Analysis
+                  </div>
+                  {lead.aiScore.explanation}
+                </div>
+              )}
+
+              {aiAvailable && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleExplainScore}
+                  isLoading={explainingScore}
+                  className="w-full text-xs"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-primary" />
+                  <span>{lead.aiScore.explanation ? 'Refresh AI Analysis' : 'Explain Score with AI'}</span>
+                </Button>
+              )}
+            </div>
+          )}
 
           {/* Record Details Card */}
           <div className="bg-card border border-border rounded-card p-5 shadow-sm space-y-4">
@@ -407,6 +510,143 @@ export const LeadDetailPage: React.FC = () => {
 
             {/* Custom Fields (Part 5) */}
             <CustomFieldsSection entity="lead" values={lead.custom || {}} readOnly />
+
+            {/* Phase 5: Where this lead came from Card */}
+            <div className="bg-card border border-border rounded-card p-5 shadow-sm space-y-3.5">
+              <div className="flex items-center justify-between border-b border-border pb-2.5">
+                <div className="flex items-center gap-1.5">
+                  <Target className="w-4 h-4 text-primary" />
+                  <h3 className="text-sm font-semibold text-foreground">
+                    Where this lead came from
+                  </h3>
+                </div>
+                {lead.isTest && (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                    TEST LEAD
+                  </span>
+                )}
+              </div>
+
+              <div className="space-y-3 text-xs">
+                {/* Marketing Channel */}
+                <div>
+                  <span className="text-muted block text-[11px] mb-1">Marketing Channel</span>
+                  <span
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-semibold text-xs capitalize ${
+                      lead.channel === 'google_ads'
+                        ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20'
+                        : lead.channel === 'facebook'
+                        ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20'
+                        : lead.channel === 'instagram'
+                        ? 'bg-orange-500/10 text-orange-600 dark:text-orange-400 border border-orange-500/20'
+                        : lead.channel === 'website_form'
+                        ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
+                        : lead.channel === 'whatsapp'
+                        ? 'bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/20'
+                        : 'bg-neutral-500/10 text-neutral-600 dark:text-neutral-400 border border-neutral-500/20'
+                    }`}
+                  >
+                    <Radio className="w-3 h-3" />
+                    <span>{lead.channel ? lead.channel.replace('_', ' ') : 'Manual / Other'}</span>
+                  </span>
+                </div>
+
+                {/* Campaign */}
+                {lead.campaign?.name && (
+                  <div>
+                    <span className="text-muted block text-[11px] mb-0.5">Campaign</span>
+                    <span className="font-semibold text-foreground flex items-center gap-1">
+                      <Target className="w-3.5 h-3.5 text-muted" />
+                      <span>{lead.campaign.name}</span>
+                    </span>
+                    {lead.campaign.externalId && (
+                      <span className="text-[10px] text-muted font-mono block mt-0.5">
+                        ID: {lead.campaign.externalId}
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                {/* Ad Set & Ad */}
+                {(lead.adSet?.name || lead.ad?.name) && (
+                  <div className="grid grid-cols-2 gap-2 pt-1 border-t border-border/40 text-[11px]">
+                    {lead.adSet?.name && (
+                      <div>
+                        <span className="text-muted block text-[10px]">Ad Set</span>
+                        <span className="font-medium text-foreground truncate block">
+                          {lead.adSet.name}
+                        </span>
+                      </div>
+                    )}
+                    {lead.ad?.name && (
+                      <div>
+                        <span className="text-muted block text-[10px]">Ad Creative</span>
+                        <span className="font-medium text-foreground truncate block">
+                          {lead.ad.name}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Form Name */}
+                {lead.formName && (
+                  <div>
+                    <span className="text-muted block text-[11px] mb-0.5">Inbound Form</span>
+                    <span className="font-medium text-foreground">{lead.formName}</span>
+                  </div>
+                )}
+
+                {/* Inquiries Count */}
+                <div className="flex items-center justify-between pt-1 border-t border-border/40">
+                  <span className="text-muted text-[11px]">Total Inquiries:</span>
+                  <span className="font-bold text-foreground px-2 py-0.5 rounded bg-muted/20 text-[11px]">
+                    {lead.inquiryCount || 1} {lead.inquiryCount === 1 ? 'inquiry' : 'inquiries'}
+                  </span>
+                </div>
+
+                {/* UTM Parameters */}
+                {lead.utm && (lead.utm.source || lead.utm.campaign || lead.utm.medium) && (
+                  <div className="pt-2 border-t border-border/40 space-y-1">
+                    <span className="text-muted block text-[11px] font-semibold">UTM Attribution:</span>
+                    <div className="p-2 rounded-lg bg-card-subtle border border-border/60 text-[11px] font-mono space-y-0.5">
+                      {lead.utm.source && <div>utm_source: <span className="text-foreground">{lead.utm.source}</span></div>}
+                      {lead.utm.medium && <div>utm_medium: <span className="text-foreground">{lead.utm.medium}</span></div>}
+                      {lead.utm.campaign && <div>utm_campaign: <span className="text-foreground">{lead.utm.campaign}</span></div>}
+                      {lead.utm.term && <div>utm_term: <span className="text-foreground">{lead.utm.term}</span></div>}
+                      {lead.utm.content && <div>utm_content: <span className="text-foreground">{lead.utm.content}</span></div>}
+                    </div>
+                  </div>
+                )}
+
+                {/* Click IDs */}
+                {lead.clickIds && (lead.clickIds.gclid || lead.clickIds.fbclid) && (
+                  <div className="text-[11px] font-mono p-2 rounded-lg bg-card-subtle border border-border/60 truncate">
+                    {lead.clickIds.gclid && <div className="truncate">gclid: {lead.clickIds.gclid}</div>}
+                    {lead.clickIds.fbclid && <div className="truncate">fbclid: {lead.clickIds.fbclid}</div>}
+                  </div>
+                )}
+
+                {/* Consent Status */}
+                <div className="pt-2 border-t border-border/40 text-[11px] space-y-1">
+                  <div className="flex items-center gap-1.5">
+                    <ShieldCheck
+                      className={`w-3.5 h-3.5 ${
+                        lead.consent?.given ? 'text-emerald-500' : 'text-neutral-400'
+                      }`}
+                    />
+                    <span className="font-medium text-foreground">
+                      Consent: {lead.consent?.given ? 'Granted & Documented' : 'Not recorded'}
+                    </span>
+                  </div>
+                  {lead.consent?.text && (
+                    <p className="text-[10px] text-muted italic line-clamp-2">
+                      "{lead.consent.text}"
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </Reveal>
@@ -834,6 +1074,15 @@ export const LeadDetailPage: React.FC = () => {
             company: lead.company,
           },
         }}
+      />
+
+      {/* Record Summary Modal */}
+      <RecordSummaryModal
+        isOpen={summaryModalOpen}
+        onClose={() => setSummaryModalOpen(false)}
+        entityType="lead"
+        entityId={id!}
+        recordName={lead.name}
       />
     </PageTransition>
   );

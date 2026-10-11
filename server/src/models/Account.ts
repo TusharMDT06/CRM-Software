@@ -1,7 +1,9 @@
 import mongoose, { Document, Schema, Types } from 'mongoose';
+import { tenantPlugin } from '../utils/tenantPlugin.js';
 
 export interface IAccount extends Document {
   _id: Types.ObjectId;
+  tenantId: Types.ObjectId;
   name: string;
   industry: string;
   website: string;
@@ -64,5 +66,6 @@ const AccountSchema = new Schema<IAccount>(
 );
 
 AccountSchema.index({ name: 'text', industry: 'text', city: 'text' });
+AccountSchema.plugin(tenantPlugin);
 
 export const Account = mongoose.model<IAccount>('Account', AccountSchema);

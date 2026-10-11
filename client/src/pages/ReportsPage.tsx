@@ -39,7 +39,7 @@ export const ReportsPage: React.FC = () => {
   const { isAdmin, isManager } = useAuth();
 
   const [activeTab, setActiveTab] = useState<
-    'funnel' | 'revenue' | 'leads' | 'team' | 'forecast' | 'invoices'
+    'funnel' | 'revenue' | 'leads' | 'team' | 'forecast' | 'invoices' | 'support'
   >('funnel');
 
   const [preset, setPreset] = useState<DatePreset>('this_year');
@@ -146,6 +146,16 @@ export const ReportsPage: React.FC = () => {
       return res.data;
     },
     enabled: activeTab === 'invoices',
+  });
+
+  // Query Support Tickets
+  const { data: supportReportsData } = useQuery({
+    queryKey: ['report-support', dateParams, ownerFilter],
+    queryFn: async () => {
+      const res = await api.get(`/reports/support?${dateParams}${ownerFilter ? `&assignee=${ownerFilter}` : ''}`);
+      return res.data;
+    },
+    enabled: activeTab === 'support',
   });
 
   // Helper to export CSV from arbitrary tabular data
@@ -260,6 +270,7 @@ export const ReportsPage: React.FC = () => {
           ...((isAdmin || isManager) ? [{ id: 'team', label: 'Team Leaderboard' }] : []),
           { id: 'forecast', label: 'Forecast' },
           { id: 'invoices', label: 'Invoices & Receivables' },
+          { id: 'support', label: 'Support & Tickets' },
         ].map((tab) => (
           <button
             key={tab.id}
@@ -910,6 +921,171 @@ export const ReportsPage: React.FC = () => {
                         <td className="py-2.5 text-muted">{c.invoiceCount}</td>
                         <td className="py-2.5 font-bold text-foreground text-right">
                           {formatINR(c.totalRevenueRupees)}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= 7. SUPPORT & TICKETS TAB ================= */}
+      {activeTab === 'support' && (
+        <div className="space-y-6">
+          {/* Support KPIs */}
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+            <div className="p-4 bg-card border border-border rounded-2xl">
+              <span className="text-[11px] font-semibold text-muted uppercase tracking-wider block">
+                Total Tickets
+              </span>
+              <span className="text-2xl font-bold text-foreground mt-1 block">
+                {supportReportsData?.totalTickets ?? 0}
+              </span>
+            </div>
+
+            <div className="p-4 bg-card border border-border rounded-2xl">
+              <span className="text-[11px] font-semibold text-muted uppercase tracking-wider block">
+                Open Tickets
+              </span>
+              <span className="text-2xl font-bold text-amber-600 mt-1 block">
+                {supportReportsData?.openTickets ?? 0}
+              </span>
+            </div>
+
+            <div className="p-4 bg-card border border-border rounded-2xl">
+              <span className="text-[11px] font-semibold text-muted uppercase tracking-wider block">
+                Resolved
+              </span>
+              <span className="text-2xl font-bold text-emerald-600 mt-1 block">
+                {supportReportsData?.resolvedTickets ?? 0}
+              </span>
+            </div>
+
+            <div className="p-4 bg-card border border-border rounded-2xl">
+              <span className="text-[11px] font-semibold text-muted uppercase tracking-wider block">
+                SLA Compliance
+              </span>
+              <span className="text-2xl font-bold text-foreground mt-1 block">
+                {supportReportsData?.slaCompliancePercent ?? 100}%
+              </span>
+            </div>
+
+            <div className="p-4 bg-card border border-border rounded-2xl">
+              <span className="text-[11px] font-semibold text-muted uppercase tracking-wider block">
+                Avg Response
+              </span>
+              <span className="text-2xl font-bold text-foreground mt-1 block">
+                {supportReportsData?.avgFirstResponseHours ?? 0}h
+              </span>
+            </div>
+
+            <div className="p-4 bg-card border border-border rounded-2xl">
+              <span className="text-[11px] font-semibold text-muted uppercase tracking-wider block">
+                Avg Resolution
+              </span>
+              <span className="text-2xl font-bold text-foreground mt-1 block">
+                {supportReportsData?.avgResolutionHours ?? 0}h
+              </span>
+            </div>
+          </div>
+
+          {/* Breakdown cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            {/* Status Breakdown */}
+            <div className="p-5 bg-card border border-border rounded-2xl space-y-3">
+              <h4 className="text-xs font-semibold text-muted uppercase tracking-wider">
+                Tickets by Status
+              </h4>
+              <div className="space-y-2 text-xs">
+                {Object.entries(supportReportsData?.statusCounts || {}).map(([st, cnt]) => (
+                  <div key={st} className="flex items-center justify-between p-2 rounded-xl bg-muted/30">
+                    <span className="capitalize font-medium text-foreground">{st}</span>
+                    <span className="font-bold text-foreground">{cnt as any}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Channel Breakdown */}
+            <div className="p-5 bg-card border border-border rounded-2xl space-y-3">
+              <h4 className="text-xs font-semibold text-muted uppercase tracking-wider">
+                Tickets by Channel
+              </h4>
+              <div className="space-y-2 text-xs">
+                {Object.entries(supportReportsData?.channelCounts || {}).map(([ch, cnt]) => (
+                  <div key={ch} className="flex items-center justify-between p-2 rounded-xl bg-muted/30">
+                    <span className="capitalize font-medium text-foreground">{ch}</span>
+                    <span className="font-bold text-foreground">{cnt as any}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Team Performance Table */}
+          <div className="p-5 bg-card border border-border rounded-2xl space-y-4">
+            <div className="flex items-center justify-between">
+              <h4 className="text-xs font-semibold text-muted uppercase tracking-wider">
+                Support Agent Performance
+              </h4>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  exportTableAsCSV(
+                    'support_agent_performance',
+                    supportReportsData?.agents || []
+                  )
+                }
+              >
+                <Download className="w-3.5 h-3.5 mr-1" />
+                <span>Export CSV</span>
+              </Button>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs text-left">
+                <thead className="border-b border-border text-muted">
+                  <tr>
+                    <th className="py-2.5 font-medium">Agent</th>
+                    <th className="py-2.5 font-medium">Assigned</th>
+                    <th className="py-2.5 font-medium">Resolved</th>
+                    <th className="py-2.5 font-medium">Avg Resolution</th>
+                    <th className="py-2.5 font-medium text-right">SLA Compliance</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {(supportReportsData?.agents || []).length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="py-6 text-center text-muted">
+                        No agent performance records available for this period.
+                      </td>
+                    </tr>
+                  ) : (
+                    (supportReportsData?.agents || []).map((ag: any) => (
+                      <tr key={ag.id} className="hover:bg-muted/40">
+                        <td className="py-2.5 font-semibold text-foreground">
+                          {ag.name}
+                          <span className="block text-[11px] text-muted font-normal">{ag.email}</span>
+                        </td>
+                        <td className="py-2.5 text-foreground">{ag.assigned}</td>
+                        <td className="py-2.5 text-emerald-600 font-semibold">{ag.resolved}</td>
+                        <td className="py-2.5 text-foreground">{ag.avgResolutionHours} hrs</td>
+                        <td className="py-2.5 font-bold text-right">
+                          <span
+                            className={
+                              ag.compliancePercent >= 90
+                                ? 'text-emerald-600'
+                                : ag.compliancePercent >= 75
+                                ? 'text-amber-600'
+                                : 'text-rose-600'
+                            }
+                          >
+                            {ag.compliancePercent}%
+                          </span>
                         </td>
                       </tr>
                     ))

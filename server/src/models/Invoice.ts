@@ -1,5 +1,6 @@
 import mongoose, { Document, Schema, Types } from 'mongoose';
 import { TaxMode } from './Quote.js';
+import { tenantPlugin } from '../utils/tenantPlugin.js';
 
 export type InvoiceStatus =
   | 'draft'
@@ -22,6 +23,7 @@ export interface IInvoiceLineItem {
 
 export interface IInvoice extends Document {
   _id: Types.ObjectId;
+  tenantId: Types.ObjectId;
   number: string;
   status: InvoiceStatus;
   quote?: Types.ObjectId;
@@ -106,7 +108,6 @@ const InvoiceSchema = new Schema<IInvoice>(
     number: {
       type: String,
       required: true,
-      unique: true,
       trim: true,
       index: true,
     },
@@ -239,6 +240,8 @@ const InvoiceSchema = new Schema<IInvoice>(
   }
 );
 
+InvoiceSchema.index({ tenantId: 1, number: 1 }, { unique: true });
 InvoiceSchema.index({ number: 'text', notes: 'text' });
+InvoiceSchema.plugin(tenantPlugin);
 
 export const Invoice = mongoose.model<IInvoice>('Invoice', InvoiceSchema);

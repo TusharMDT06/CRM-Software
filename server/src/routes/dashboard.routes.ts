@@ -3,6 +3,7 @@ import { FilterQuery } from 'mongoose';
 import { Deal, DealStage } from '../models/Deal.js';
 import { Lead } from '../models/Lead.js';
 import { Task } from '../models/Task.js';
+import { Ticket } from '../models/Ticket.js';
 import { authenticate } from '../middleware/auth.js';
 import { AuthRequest } from '../types/index.js';
 import { buildOwnerFilter } from '../utils/queryHelper.js';
@@ -66,19 +67,26 @@ dashboardRouter.get('/summary', async (req: AuthRequest, res: Response) => {
     const totalClosed = dealsWonCount + lostDeals.length;
     const winRate = totalClosed > 0 ? Math.round((dealsWonCount / totalClosed) * 100) : (allDeals.length > 0 ? Math.round((dealsWonCount / allDeals.length) * 100) : 0);
 
-    // Overdue open deals (at risk)
-    const overdueOpenDeals = openDeals.filter(d => new Date(d.expectedClose) < now);
-    const healthyOpenDeals = openDeals.filter(d => new Date(d.expectedClose) >= now);
+    // High-risk open deals (deterministic risk score engine + overdue check)
+    const atRiskOpenDeals = openDeals.filter(
+      d => d.aiRisk?.level === 'high' || (d.aiRisk?.score !== undefined && d.aiRisk.score >= 60) || new Date(d.expectedClose) < now
+    );
+    const healthyOpenDeals = openDeals.filter(
+      d => !atRiskOpenDeals.includes(d)
+    );
 
     const pipelineHealth = openDealCount > 0 ? Math.round((healthyOpenDeals.length / openDealCount) * 100) : 100;
-    const dealsAtRiskAmount = overdueOpenDeals.reduce((sum, d) => sum + d.amount, 0);
-    const dealsAtRiskPercent = openDealCount > 0 ? Math.round((overdueOpenDeals.length / openDealCount) * 100) : 0;
+    const dealsAtRiskAmount = atRiskOpenDeals.reduce((sum, d) => sum + d.amount, 0);
+    const dealsAtRiskPercent = openDealCount > 0 ? Math.round((atRiskOpenDeals.length / openDealCount) * 100) : 0;
     const dealsAtRisk = {
-      count: overdueOpenDeals.length,
+      count: atRiskOpenDeals.length,
       amount: dealsAtRiskAmount,
       percentage: dealsAtRiskPercent,
       activeCount: openDealCount,
       healthyCount: healthyOpenDeals.length,
+      highRiskCount: openDeals.filter(d => d.aiRisk?.level === 'high').length,
+      mediumRiskCount: openDeals.filter(d => d.aiRisk?.level === 'medium').length,
+      lowRiskCount: openDeals.filter(d => d.aiRisk?.level === 'low').length,
     };
 
     // Leads query
@@ -152,6 +160,11 @@ dashboardRouter.get('/summary', async (req: AuthRequest, res: Response) => {
     // Insights for greeting card
     const dealsInNegotiation = allDeals.filter(d => d.stage === 'negotiation').length;
 
+    const [openTicketsCount, breachedTicketsCount] = await Promise.all([
+      Ticket.countDocuments({ status: { $nin: ['resolved', 'closed'] } }),
+      Ticket.countDocuments({ status: { $nin: ['resolved', 'closed'] }, slaBreached: true }),
+    ]);
+
     res.json({
       wonThisMonth,
       wonLastMonth,
@@ -165,6 +178,10 @@ dashboardRouter.get('/summary', async (req: AuthRequest, res: Response) => {
       pipelineHealth,
       dealsAtRisk,
       taskStats,
+      ticketStats: {
+        open: openTicketsCount,
+        breached: breachedTicketsCount,
+      },
       dealsByStage,
       revenueByMonth,
       recentDeals,
@@ -173,6 +190,7 @@ dashboardRouter.get('/summary', async (req: AuthRequest, res: Response) => {
         newLeadsWaiting: newLeadsCount,
         dealsInNegotiation,
         overdueTasks: overdueTasksList.length,
+        openTickets: openTicketsCount,
       },
     });
   } catch (error: any) {

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Building,
@@ -6,10 +7,21 @@ import {
   Landmark,
   Save,
   Hash,
+  Download,
+  Trash2,
+  Archive,
+  AlertOctagon,
+  CheckCircle2,
+  Sparkles,
+  ShieldCheck,
+  BarChart2,
 } from 'lucide-react';
 import { fetchCompanySettings, updateCompanySettings } from '../api/phase3.js';
+import { api } from '../api/client.js';
+import { useAuth } from '../context/AuthContext.js';
 import { useToast } from '../context/ToastContext.js';
 import { Reveal } from '../components/motion/Motion.js';
+import { getAiStatus, updateAiConsent, AiStatusResponse } from '../api/ai.js';
 
 export const CompanySettingsPage: React.FC = () => {
   const { success, error } = useToast();
@@ -81,6 +93,84 @@ export const CompanySettingsPage: React.FC = () => {
     },
   });
 
+  const { tenant, refreshMe } = useAuth();
+  const [exportData, setExportData] = useState<{
+    jobId: string;
+    downloadUrl: string;
+    recordCounts: Record<string, number>;
+  } | null>(null);
+
+  const exportMutation = useMutation({
+    mutationFn: async () => {
+      const res = await api.post('/settings/tenant/export');
+      return res.data;
+    },
+    onSuccess: (data) => {
+      setExportData(data);
+      success('Workspace export generated successfully!');
+    },
+    onError: (err: any) => {
+      error(err.message || 'Failed to generate workspace export');
+    },
+  });
+
+  const deleteRequestMutation = useMutation({
+    mutationFn: async () => {
+      const res = await api.post('/settings/tenant/delete-request');
+      return res.data;
+    },
+    onSuccess: async (data) => {
+      success(data.message || 'Deletion requested. 14-day grace period started.');
+      await refreshMe();
+    },
+    onError: (err: any) => {
+      error(err.message || 'Failed to request deletion');
+    },
+  });
+
+  const cancelDeletionMutation = useMutation({
+    mutationFn: async () => {
+      const res = await api.post('/settings/tenant/cancel-deletion');
+      return res.data;
+    },
+    onSuccess: async (data) => {
+      success(data.message || 'Deletion request cancelled successfully.');
+      await refreshMe();
+    },
+    onError: (err: any) => {
+      error(err.message || 'Failed to cancel deletion');
+    },
+  });
+
+  // Stage 4: AI Status & Privacy Consent
+  const { data: aiStatus, refetch: refetchAiStatus } = useQuery<AiStatusResponse>({
+    queryKey: ['aiStatus'],
+    queryFn: () => getAiStatus(),
+  });
+
+  const [aiEnabledToggle, setAiEnabledToggle] = useState(false);
+  const [aiNoticeAccepted, setAiNoticeAccepted] = useState(false);
+
+  useEffect(() => {
+    if (aiStatus) {
+      setAiEnabledToggle(Boolean(aiStatus.aiEnabled));
+    }
+  }, [aiStatus]);
+
+  const aiConsentMutation = useMutation({
+    mutationFn: async ({ enabled, acceptedNotice }: { enabled: boolean; acceptedNotice: boolean }) => {
+      return updateAiConsent(enabled, acceptedNotice);
+    },
+    onSuccess: () => {
+      success('AI privacy settings updated successfully.');
+      refetchAiStatus();
+      queryClient.invalidateQueries({ queryKey: ['aiStatus'] });
+    },
+    onError: (err: any) => {
+      error(err.message || 'Failed to update AI settings');
+    },
+  });
+
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -147,6 +237,28 @@ export const CompanySettingsPage: React.FC = () => {
           </button>
         </div>
       </Reveal>
+
+      {/* Settings Navigation Tabs */}
+      <div className="border-b border-border flex gap-2">
+        {[
+          { label: 'Company Settings', to: '/settings/company' },
+          { label: 'AI Intelligence & Usage', to: '/settings/ai' },
+          { label: 'Notifications', to: '/settings/notifications' },
+          { label: 'Custom Fields', to: '/settings/custom-fields' },
+        ].map((tab) => (
+          <Link
+            key={tab.to}
+            to={tab.to}
+            className={`px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors ${
+              tab.to === '/settings/company'
+                ? 'border-foreground text-foreground'
+                : 'border-transparent text-muted hover:text-foreground'
+            }`}
+          >
+            {tab.label}
+          </Link>
+        ))}
+      </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Section 1: Legal Information & Logo */}
@@ -476,6 +588,269 @@ export const CompanySettingsPage: React.FC = () => {
                 placeholder="Standard payment terms, warranty disclaimer, delivery expectations..."
                 className="w-full px-3.5 py-2 text-sm bg-transparent border border-border rounded-xl focus:outline-hidden focus:ring-1 focus:ring-foreground"
               />
+            </div>
+          </div>
+        </Reveal>
+
+        {/* Stage 4: AI Features & Data Privacy Gate (Google Gemini) */}
+        <Reveal delay={0.22}>
+          <div className="bg-card border border-border rounded-2xl p-6 shadow-xs space-y-6">
+            <div className="flex items-center justify-between pb-3 border-b border-border">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-primary" />
+                <h2 className="text-sm font-bold uppercase tracking-wider text-foreground">
+                  AI Intelligence & Data Privacy Gate (Google Gemini)
+                </h2>
+              </div>
+              <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+                Gemini 2.0
+              </span>
+            </div>
+
+            {!aiStatus?.isConfigured ? (
+              <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-300 text-xs space-y-1">
+                <div className="font-semibold flex items-center gap-1.5">
+                  <ShieldCheck className="w-4 h-4" />
+                  Gemini API Key is not configured on the server
+                </div>
+                <p className="text-[11px] text-muted">
+                  To enable Copilot, smart email drafting, and natural-language search, set <code>GEMINI_API_KEY</code> in the server <code>.env</code> file. AI UI remains hidden until configured.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-5">
+                {/* Enable toggle */}
+                <div className="flex items-center justify-between p-4 rounded-xl border border-border bg-card-subtle">
+                  <div>
+                    <h3 className="text-xs font-bold text-foreground">
+                      Enable Flowdesk AI Features
+                    </h3>
+                    <p className="text-[11px] text-muted mt-0.5">
+                      Powers Copilot chat, email drafting, record summaries, and natural-language search.
+                    </p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={aiEnabledToggle}
+                      onChange={(e) => setAiEnabledToggle(e.target.checked)}
+                      className="sr-only peer"
+                    />
+                    <div className="w-9 h-5 bg-neutral-300 peer-focus:outline-none rounded-full peer dark:bg-neutral-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-neutral-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
+                  </label>
+                </div>
+
+                {/* Privacy & Terms Disclosure Notice */}
+                <div className="p-4 rounded-xl border border-primary/20 bg-primary/5 text-xs space-y-3">
+                  <div className="flex items-center gap-2 text-primary font-semibold">
+                    <ShieldCheck className="w-4 h-4" />
+                    <span>Data Privacy & Google Terms Notice</span>
+                  </div>
+
+                  <div className="space-y-1.5 text-foreground leading-relaxed text-[11px]">
+                    <p>
+                      <strong>What customer data is sent to Google:</strong> Record names & values, notes, timeline activity entries, email & WhatsApp correspondence, and support ticket descriptions.
+                    </p>
+                    <p className="text-muted">
+                      <strong>Google AI Studio Terms:</strong> On the free (unpaid) tier, prompts and responses may be processed to improve Google products and reviewed by human reviewers. On paid-tier (billing-enabled) API keys, customer data is never used for training or human review. We recommend a paid-tier key for real customer data.
+                    </p>
+                  </div>
+
+                  <div className="pt-2 border-t border-primary/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-foreground">
+                      <input
+                        type="checkbox"
+                        checked={aiNoticeAccepted}
+                        onChange={(e) => setAiNoticeAccepted(e.target.checked)}
+                        className="rounded border-border text-primary focus:ring-primary w-4 h-4"
+                      />
+                      <span>I understand the data shared and authorize enabling AI for this organization.</span>
+                    </label>
+
+                    <button
+                      type="button"
+                      disabled={aiConsentMutation.isPending || (aiEnabledToggle && !aiNoticeAccepted)}
+                      onClick={() =>
+                        aiConsentMutation.mutate({
+                          enabled: aiEnabledToggle,
+                          acceptedNotice: aiNoticeAccepted,
+                        })
+                      }
+                      className="shrink-0 inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground text-xs font-semibold hover:opacity-90 disabled:opacity-50 transition-opacity shadow-xs"
+                    >
+                      <Save className="w-3.5 h-3.5" />
+                      {aiConsentMutation.isPending ? 'Saving...' : 'Confirm AI Consent'}
+                    </button>
+                  </div>
+
+                  {aiStatus?.aiConsentConfirmedAt && (
+                    <div className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium pt-1">
+                      ✓ Confirmed by organization admin on{' '}
+                      {new Date(aiStatus.aiConsentConfirmedAt).toLocaleString()}
+                    </div>
+                  )}
+                </div>
+
+                {/* AI Usage & Quotas (Admin) */}
+                <div className="p-4 rounded-xl border border-border bg-card-subtle space-y-3">
+                  <div className="flex items-center justify-between text-xs font-bold text-foreground">
+                    <span className="flex items-center gap-1.5">
+                      <BarChart2 className="w-4 h-4 text-primary" />
+                      AI Request Usage & Quotas (This Month)
+                    </span>
+                    <span className="text-[11px] font-mono text-muted">
+                      {aiStatus?.limits.monthlyUsed} / {aiStatus?.limits.monthlyMax} requests
+                    </span>
+                  </div>
+
+                  <div className="w-full bg-card rounded-full h-2 border border-border overflow-hidden">
+                    <div
+                      className="bg-primary h-full transition-all duration-300"
+                      style={{
+                        width: `${Math.min(
+                          100,
+                          ((aiStatus?.limits.monthlyUsed || 0) / (aiStatus?.limits.monthlyMax || 50)) * 100
+                        )}%`,
+                      }}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 text-xs">
+                    <div className="p-2.5 rounded-lg bg-card border border-border">
+                      <span className="text-[10px] text-muted uppercase">Strong Model</span>
+                      <p className="font-semibold text-foreground truncate">{aiStatus?.models.strong}</p>
+                    </div>
+                    <div className="p-2.5 rounded-lg bg-card border border-border">
+                      <span className="text-[10px] text-muted uppercase">Fast Model</span>
+                      <p className="font-semibold text-foreground truncate">{aiStatus?.models.fast}</p>
+                    </div>
+                    <div className="p-2.5 rounded-lg bg-card border border-border">
+                      <span className="text-[10px] text-muted uppercase">Monthly Cap</span>
+                      <p className="font-semibold text-foreground">{aiStatus?.limits.monthlyMax} requests</p>
+                    </div>
+                    <div className="p-2.5 rounded-lg bg-card border border-border">
+                      <span className="text-[10px] text-muted uppercase">Plan Tier</span>
+                      <p className="font-semibold text-foreground capitalize">{aiStatus?.limits.plan}</p>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-border/60 flex flex-wrap items-center justify-between text-[11px] text-muted gap-2">
+                    <span>Detailed usage metrics, token consumption, and audit logs are available in AI Intelligence.</span>
+                    <Link to="/settings/ai" className="font-semibold text-primary hover:underline">
+                      View AI Usage Logs &rarr;
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </Reveal>
+
+        {/* Organization Data Export & Danger Zone */}
+        <Reveal delay={0.25}>
+          <div className="bg-card border border-border rounded-2xl p-6 shadow-xs space-y-5">
+            <div className="flex items-center justify-between pb-3 border-b border-border">
+              <div className="flex items-center gap-2">
+                <Archive className="w-4 h-4 text-foreground" />
+                <h2 className="text-sm font-bold uppercase tracking-wider text-foreground">
+                  Workspace Data & Tenancy
+                </h2>
+              </div>
+              <span className="text-[11px] font-mono bg-muted/20 px-2 py-0.5 rounded text-muted">
+                Tenant: {tenant?.slug || 'default'}
+              </span>
+            </div>
+
+            {/* Export Section */}
+            <div className="p-4 rounded-xl border border-border bg-card-subtle flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h3 className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                  <Download className="w-4 h-4 text-brand" />
+                  Full Workspace Data Export (ZIP)
+                </h3>
+                <p className="text-[11px] text-muted mt-0.5">
+                  Export all leads, contacts, accounts, deals, tasks, products, quotes, invoices, payments and workflows as individual CSV files in a compressed archive.
+                </p>
+                {exportData && (
+                  <div className="mt-2.5 p-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded-lg text-[11px] text-emerald-600 dark:text-emerald-400">
+                    <div className="font-semibold flex items-center gap-1">
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      Export ready! Download your archive:
+                    </div>
+                    <div className="mt-1">
+                      <a
+                        href={exportData.downloadUrl}
+                        download
+                        className="underline font-bold text-foreground hover:text-brand"
+                      >
+                        Download Flowdesk Export Archive (.zip)
+                      </a>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <button
+                type="button"
+                disabled={exportMutation.isPending}
+                onClick={() => exportMutation.mutate()}
+                className="shrink-0 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-border bg-card hover:bg-muted/10 text-xs font-semibold text-foreground transition-colors disabled:opacity-50 shadow-2xs"
+              >
+                <Download className="w-3.5 h-3.5" />
+                {exportMutation.isPending ? 'Generating Export...' : 'Generate Export ZIP'}
+              </button>
+            </div>
+
+            {/* Tenant Deletion (Danger Zone) */}
+            <div className="p-4 rounded-xl border border-red-500/20 bg-red-500/5 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-xs font-bold text-red-600 dark:text-red-400 flex items-center gap-1.5">
+                    <AlertOctagon className="w-4 h-4" />
+                    Danger Zone: Workspace Deletion Request
+                  </h3>
+                  <p className="text-[11px] text-muted mt-0.5">
+                    Soft deletes all organization data with a 14-day recovery grace period, after which the tenant and all files are permanently purged.
+                  </p>
+                </div>
+
+                {tenant?.deletionRequestedAt ? (
+                  <button
+                    type="button"
+                    disabled={cancelDeletionMutation.isPending}
+                    onClick={() => cancelDeletionMutation.mutate()}
+                    className="shrink-0 inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl border border-border bg-card text-xs font-semibold text-foreground hover:bg-muted/10 transition-colors"
+                  >
+                    Cancel Deletion Request
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={deleteRequestMutation.isPending}
+                    onClick={() => {
+                      if (
+                        window.confirm(
+                          'Are you sure you want to request deletion of this organization? Access will be suspended with a 14-day grace period before permanent purge.'
+                        )
+                      ) {
+                        deleteRequestMutation.mutate();
+                      }
+                    }}
+                    className="shrink-0 inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-semibold transition-colors disabled:opacity-50 shadow-2xs"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    Request Workspace Deletion
+                  </button>
+                )}
+              </div>
+
+              {tenant?.deletionRequestedAt && (
+                <div className="p-2.5 rounded-lg bg-red-500/10 border border-red-500/20 text-[11px] text-red-600 dark:text-red-400">
+                  ⚠️ Deletion requested on{' '}
+                  <strong>{new Date(tenant.deletionRequestedAt).toLocaleDateString()}</strong>.
+                  All organization records are scheduled for permanent purge after 14 days.
+                </div>
+              )}
             </div>
           </div>
         </Reveal>
