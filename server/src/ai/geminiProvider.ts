@@ -80,18 +80,22 @@ export class GeminiProvider implements IAiProvider {
 
         const errMessage = String(err?.message || '').toLowerCase();
         const status = err?.status || err?.statusCode || err?.code;
-        const isRateLimit =
+        const isTransientError =
           status === 429 ||
+          status === 503 ||
           errMessage.includes('429') ||
+          errMessage.includes('503') ||
+          errMessage.includes('unavailable') ||
+          errMessage.includes('high demand') ||
           errMessage.includes('resource_exhausted') ||
           errMessage.includes('quota') ||
           errMessage.includes('too many requests') ||
           errMessage.includes('rate limit');
 
-        if (isRateLimit) {
+        if (isTransientError) {
           attempt++;
           if (attempt <= maxRetries) {
-            const backoffDelay = Math.pow(2, attempt) * 1000;
+            const backoffDelay = Math.pow(2, attempt) * 1500;
             await new Promise((resolve) => setTimeout(resolve, backoffDelay));
             continue;
           }
@@ -114,6 +118,7 @@ export class GeminiProvider implements IAiProvider {
         }
 
         // Sanitize unknown errors to prevent API key or internal leakage
+        console.error('[GeminiProvider Internal Error]:', err?.message || err);
         throw new AiProviderError('An unexpected AI processing error occurred');
       }
     }
