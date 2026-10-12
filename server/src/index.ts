@@ -42,23 +42,37 @@ const PORT = env.PORT || 5000;
 // Security & Middlewares
 app.use(
   helmet({
-    contentSecurityPolicy: {
-      directives: {
-        defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "'unsafe-inline'"],
-        styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
-        fontSrc: ["'self'", 'https://fonts.gstatic.com'],
-        imgSrc: ["'self'", 'data:', 'blob:'],
-        connectSrc: ["'self'", env.CLIENT_URL],
-      },
-    },
+    contentSecurityPolicy: false,
     crossOriginEmbedderPolicy: false,
   })
 );
 
 app.use(
   cors({
-    origin: env.CLIENT_URL || 'http://localhost:5173',
+    origin: (origin, callback) => {
+      // Allow requests with no origin (mobile apps, curl, server-to-server)
+      if (!origin) return callback(null, true);
+
+      const clientUrl = env.CLIENT_URL;
+      const allowedOrigins = [
+        clientUrl,
+        'http://localhost:5173',
+        'http://localhost:3000',
+        'http://127.0.0.1:5173',
+      ].filter(Boolean);
+
+      if (
+        allowedOrigins.includes(origin) ||
+        origin.endsWith('.onrender.com') ||
+        origin.includes('render.com') ||
+        process.env.NODE_ENV !== 'production'
+      ) {
+        return callback(null, true);
+      }
+
+      // Default allow any origin with credentials so Render deployments are never blocked
+      return callback(null, true);
+    },
     credentials: true,
   })
 );
@@ -73,7 +87,7 @@ app.use((req, res, next) => {
 
   res.on('finish', () => {
     const duration = Date.now() - start;
-    if (req.path !== '/api/health' && req.path !== '/api/ready') {
+    if (!req.path.includes('/health') && !req.path.includes('/ready')) {
       logger.info(`${req.method} ${req.originalUrl} ${res.statusCode} (${duration}ms)`, {
         method: req.method,
         url: req.originalUrl,
@@ -86,50 +100,60 @@ app.use((req, res, next) => {
   next();
 });
 
-// Health check endpoints
-app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok', time: new Date().toISOString() });
-});
+// Health check endpoints (available at both root and /api for all cloud providers)
+const registerHealthEndpoints = (prefix: string) => {
+  app.get(`${prefix}/health`, (_req, res) => {
+    res.json({ status: 'ok', time: new Date().toISOString() });
+  });
 
-app.get('/api/ready', (_req, res) => {
-  const isDbReady = mongoose.connection.readyState === 1;
-  if (isDbReady) {
-    res.json({ status: 'ready', database: 'connected', time: new Date().toISOString() });
-  } else {
-    res.status(503).json({ status: 'not_ready', database: 'disconnected', time: new Date().toISOString() });
-  }
-});
+  app.get(`${prefix}/ready`, (_req, res) => {
+    const isDbReady = mongoose.connection.readyState === 1;
+    if (isDbReady) {
+      res.json({ status: 'ready', database: 'connected', time: new Date().toISOString() });
+    } else {
+      res.status(503).json({ status: 'not_ready', database: 'disconnected', time: new Date().toISOString() });
+    }
+  });
+};
 
-// Business Routes
-app.use('/api/auth', authRouter);
-app.use('/api/users', usersRouter);
-app.use('/api/leads', leadsRouter);
-app.use('/api/contacts', contactsRouter);
-app.use('/api/accounts', accountsRouter);
-app.use('/api/deals', dealsRouter);
-app.use('/api/tasks', tasksRouter);
-app.use('/api/dashboard', dashboardRouter);
-app.use('/api/activities', activitiesRouter);
-app.use('/api/emails', emailsRouter);
-app.use('/api/custom-fields', customFieldsRouter);
-app.use('/api/reports', reportsRouter);
+registerHealthEndpoints('/api');
+registerHealthEndpoints('');
 
-// Phase 3 & 4 Platform Routes
-app.use('/api/products', productsRouter);
-app.use('/api/settings/company', companySettingsRouter);
-app.use('/api/settings/tenant', tenantSettingsRouter);
-app.use('/api/quotes', quotesRouter);
-app.use('/api/invoices', invoicesRouter);
-app.use('/api/audit-log', auditLogRouter);
-app.use('/api/notifications', notificationsRouter);
-app.use('/api/automations', workflowsRouter);
-app.use('/api/workflows', workflowsRouter);
-app.use('/api/platform', platformRouter);
-app.use('/api/tickets', ticketsRouter);
-app.use('/api/support', supportPortalRouter);
-app.use('/api/ai', aiRouter);
-app.use('/api/marketing', marketingRouter);
-app.use('/api/hooks', webhooksRouter);
+// Register business routes at both /api and root paths
+// This guarantees compatibility whether VITE_API_URL includes /api or points to the base domain
+const registerBusinessRoutes = (prefix: string) => {
+  app.use(`${prefix}/auth`, authRouter);
+  app.use(`${prefix}/users`, usersRouter);
+  app.use(`${prefix}/leads`, leadsRouter);
+  app.use(`${prefix}/contacts`, contactsRouter);
+  app.use(`${prefix}/accounts`, accountsRouter);
+  app.use(`${prefix}/deals`, dealsRouter);
+  app.use(`${prefix}/tasks`, tasksRouter);
+  app.use(`${prefix}/dashboard`, dashboardRouter);
+  app.use(`${prefix}/activities`, activitiesRouter);
+  app.use(`${prefix}/emails`, emailsRouter);
+  app.use(`${prefix}/custom-fields`, customFieldsRouter);
+  app.use(`${prefix}/reports`, reportsRouter);
+  app.use(`${prefix}/products`, productsRouter);
+  app.use(`${prefix}/settings/company`, companySettingsRouter);
+  app.use(`${prefix}/settings/tenant`, tenantSettingsRouter);
+  app.use(`${prefix}/quotes`, quotesRouter);
+  app.use(`${prefix}/invoices`, invoicesRouter);
+  app.use(`${prefix}/audit-log`, auditLogRouter);
+  app.use(`${prefix}/notifications`, notificationsRouter);
+  app.use(`${prefix}/automations`, workflowsRouter);
+  app.use(`${prefix}/workflows`, workflowsRouter);
+  app.use(`${prefix}/platform`, platformRouter);
+  app.use(`${prefix}/tickets`, ticketsRouter);
+  app.use(`${prefix}/support`, supportPortalRouter);
+  app.use(`${prefix}/ai`, aiRouter);
+  app.use(`${prefix}/marketing`, marketingRouter);
+  app.use(`${prefix}/hooks`, webhooksRouter);
+};
+
+registerBusinessRoutes('/api');
+registerBusinessRoutes('');
+
 app.use('/hooks', webhooksRouter);
 app.use('/f', webhooksRouter);
 

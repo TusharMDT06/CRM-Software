@@ -1,4 +1,4 @@
-import { api } from './client.js';
+import { api, getApiBaseUrl } from './client.js';
 
 export interface AiStatusResponse {
   isConfigured: boolean;
@@ -201,7 +201,8 @@ export async function streamCopilotChat(options: {
   const token = localStorage.getItem('flowdesk_token');
 
   try {
-    const response = await fetch('/api/ai/copilot/chat', {
+    const streamUrl = `${getApiBaseUrl()}/ai/copilot/chat`;
+    const response = await fetch(streamUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
