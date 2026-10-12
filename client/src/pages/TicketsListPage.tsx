@@ -396,13 +396,13 @@ export const TicketsListPage: React.FC = () => {
       {/* Filter & Search Bar */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-card border border-border p-3 rounded-2xl shadow-sm">
         <div className="relative flex-1">
-          <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
+          <Search className="w-4 h-4 text-muted absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
           <input
             type="text"
             placeholder="Search by ticket number, subject, or description..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-9 pr-3 py-1.5 text-sm bg-transparent rounded-xl border border-transparent focus:border-border focus:bg-background outline-none transition-all"
+            className="w-full pl-10 pr-3 py-1.5 text-sm bg-transparent rounded-xl border border-transparent focus:border-border focus:bg-background outline-none transition-all placeholder:text-muted"
           />
         </div>
 

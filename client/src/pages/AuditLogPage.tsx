@@ -87,13 +87,13 @@ export const AuditLogPage: React.FC = () => {
       <Reveal direction="down" delay={0.05}>
         <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-card border border-border p-3 rounded-2xl shadow-xs">
           <div className="relative w-full sm:w-80">
-            <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-muted" />
+            <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
             <input
               type="text"
               placeholder="Search by entity label..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-9.5 pr-4 py-2 text-sm bg-transparent border border-border rounded-xl focus:outline-hidden focus:ring-1 focus:ring-foreground placeholder:text-muted"
+              className="w-full pl-10 pr-4 py-2 text-sm bg-transparent border border-border rounded-xl focus:outline-hidden focus:ring-1 focus:ring-foreground placeholder:text-muted"
             />
           </div>
 

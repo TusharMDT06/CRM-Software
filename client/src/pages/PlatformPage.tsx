@@ -278,13 +278,13 @@ export const PlatformPage: React.FC = () => {
             {/* Table Toolbar */}
             <div className="p-4 border-b border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="relative flex-1 max-w-md">
-                <Search className="w-4 h-4 text-muted absolute left-3 top-1/2 -translate-y-1/2" />
+                <Search className="w-4 h-4 text-muted absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                 <input
                   type="text"
                   placeholder="Search tenants by name or slug..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-9 pr-3 py-1.5 text-xs bg-card-subtle border border-border rounded-xl text-foreground placeholder:text-muted focus:outline-none focus:ring-1 focus:ring-foreground"
+                  className="w-full pl-10 pr-3 py-1.5 text-xs bg-card-subtle border border-border rounded-xl text-foreground placeholder:text-muted focus:outline-none focus:ring-1 focus:ring-foreground"
                 />
               </div>
 
