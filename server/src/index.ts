@@ -157,7 +157,12 @@ async function startServer() {
     });
   } catch (error) {
     logger.error('[Flowdesk Server] Failed to start:', error);
-    process.exit(1);
+    if (process.env.NODE_ENV === 'production') {
+      process.exit(1);
+    } else {
+      logger.warn('[Flowdesk Server] Retrying server startup in 5 seconds...');
+      setTimeout(startServer, 5000);
+    }
   }
 }
 

@@ -62,10 +62,13 @@ export function computeFieldDiff(
   return changes;
 }
 
+import { runWithTenantContext, getTenantContext } from './tenantContext.js';
+
 export interface RecordAuditParams {
   req?: Request | any;
   actor?: any;
   actorName?: string;
+  tenantId?: any;
   source?: AuditSource;
   action: AuditAction;
   entityType: AuditEntityType;
@@ -108,18 +111,36 @@ export async function recordAudit(params: RecordAuditParams): Promise<void> {
       resolvedChanges = computeFieldDiff(params.before, params.after);
     }
 
-    await AuditLog.create({
-      actor: actorId || null,
-      actorName: actorName || (params.source === 'system' ? 'System Job' : 'Guest'),
-      source: params.source || (actorId ? 'user' : 'system'),
-      action: params.action,
-      entityType: params.entityType,
-      entityId: params.entityId ? String(params.entityId) : undefined,
-      entityLabel: params.entityLabel || '',
-      changes: resolvedChanges,
-      ip: String(ip).substring(0, 60),
-      userAgent: String(userAgent).substring(0, 250),
-    });
+    const currentCtx = getTenantContext();
+    const effectiveTenantId =
+      params.tenantId ||
+      currentCtx?.tenantId ||
+      params.actor?.tenantId ||
+      params.req?.user?.tenantId;
+
+    const auditAction = async () => {
+      await AuditLog.create({
+        tenantId: effectiveTenantId || undefined,
+        actor: actorId || null,
+        actorName: actorName || (params.source === 'system' ? 'System Job' : 'Guest'),
+        source: params.source || (actorId ? 'user' : 'system'),
+        action: params.action,
+        entityType: params.entityType,
+        entityId: params.entityId ? String(params.entityId) : undefined,
+        entityLabel: params.entityLabel || '',
+        changes: resolvedChanges,
+        ip: String(ip).substring(0, 60),
+        userAgent: String(userAgent).substring(0, 250),
+      });
+    };
+
+    if (currentCtx?.tenantId || currentCtx?.isBypassTenant) {
+      await auditAction();
+    } else if (effectiveTenantId) {
+      await runWithTenantContext({ tenantId: effectiveTenantId.toString() }, auditAction);
+    } else {
+      await runWithTenantContext({ isBypassTenant: true }, auditAction);
+    }
   } catch (error) {
     // Audit logging failure should never crash the main transaction
     console.error('[AuditLog Error] Failed to write audit log:', error);

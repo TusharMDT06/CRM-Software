@@ -373,6 +373,7 @@ authRouter.post('/login', authLimiter, validateBody(loginSchema), async (req, re
       action: 'login',
       entityType: 'auth',
       entityLabel: user.name,
+      tenantId: user.tenantId,
       req,
     });
 
