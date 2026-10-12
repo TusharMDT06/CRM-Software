@@ -12,8 +12,9 @@ const envSchema = z.object({
   RESEND_API_KEY: z.string().optional(),
   EMAIL_FROM: z.string().default('Flowdesk <onboarding@resend.dev>'),
   AUDIT_RETENTION_DAYS: z.coerce.number().default(365),
-  AI_MODEL: z.string().default('gemini-2.0-flash'),
-  AI_MODEL_FAST: z.string().default('gemini-2.0-flash-lite'),
+  AI_MODEL: z.string().default('gemini-3.8-flash'),
+  AI_MODEL_FAST: z.string().default('gemini-3.8-flash'),
+  AI_FALLBACK_MODELS: z.string().optional(),
   GEMINI_API_KEY: z.string().optional(),
 });
 
@@ -33,6 +34,7 @@ try {
     AUDIT_RETENTION_DAYS: process.env.AUDIT_RETENTION_DAYS,
     AI_MODEL: process.env.AI_MODEL,
     AI_MODEL_FAST: process.env.AI_MODEL_FAST,
+    AI_FALLBACK_MODELS: process.env.AI_FALLBACK_MODELS,
     GEMINI_API_KEY: process.env.GEMINI_API_KEY,
   });
 } catch (error: any) {

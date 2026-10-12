@@ -19,12 +19,16 @@ import {
   AiConfigurationError,
 } from './provider.js';
 
+import { logger } from '../utils/logger.js';
+
 export class GeminiProvider implements IAiProvider {
   private client: GoogleGenAI | null = null;
+  public isMockClient: boolean = false;
 
   constructor(clientOverride?: GoogleGenAI) {
     if (clientOverride) {
       this.client = clientOverride;
+      this.isMockClient = true;
     } else if (env.GEMINI_API_KEY && env.GEMINI_API_KEY.trim().length > 0) {
       this.client = new GoogleGenAI({ apiKey: env.GEMINI_API_KEY });
     }
@@ -36,9 +40,46 @@ export class GeminiProvider implements IAiProvider {
 
   public getModelName(tier: 'strong' | 'fast' = 'strong'): string {
     if (tier === 'fast') {
-      return env.AI_MODEL_FAST || 'gemini-2.0-flash-lite';
+      return env.AI_MODEL_FAST || 'gemini-3.8-flash';
     }
-    return env.AI_MODEL || 'gemini-2.0-flash';
+    return env.AI_MODEL || 'gemini-3.8-flash';
+  }
+
+  public getFallbackChain(requestedModel?: string, tier: 'strong' | 'fast' = 'strong'): string[] {
+    const configuredPrimary = requestedModel || this.getModelName(tier);
+
+    if (this.isMockClient) {
+      return [configuredPrimary];
+    }
+
+    const envFallbacks = env.AI_FALLBACK_MODELS
+      ? env.AI_FALLBACK_MODELS.split(',').map((m) => m.trim()).filter(Boolean)
+      : [];
+
+    const defaultChain =
+      tier === 'fast'
+        ? [
+            'gemini-3.8-flash',
+            'gemini-3.7-flash',
+            'gemini-3.5-flash-lite',
+            'gemini-3.5-flash',
+            'gemini-2.5-flash-lite',
+            'gemini-2.5-flash',
+            'gemini-flash-lite-latest',
+            'gemini-flash-latest',
+          ]
+        : [
+            'gemini-3.8-flash',
+            'gemini-3.7-flash',
+            'gemini-3.6-flash',
+            'gemini-3.5-flash',
+            'gemini-2.5-flash',
+            'gemini-2.5-pro',
+            'gemini-flash-latest',
+            'gemini-pro-latest',
+          ];
+
+    return Array.from(new Set([configuredPrimary, ...envFallbacks, ...defaultChain]));
   }
 
   private getClient(): GoogleGenAI {
@@ -124,6 +165,51 @@ export class GeminiProvider implements IAiProvider {
     }
   }
 
+  private async executeWithModelFallback<T>(
+    modelChain: string[],
+    operation: (currentModel: string) => Promise<T>,
+    timeoutMs: number = 30000
+  ): Promise<T> {
+    let lastError: any = null;
+
+    for (let i = 0; i < modelChain.length; i++) {
+      const currentModel = modelChain[i];
+      try {
+        return await this.executeWithRetry(() => operation(currentModel), timeoutMs, 2);
+      } catch (err: any) {
+        lastError = err;
+        const errMessage = String(err?.message || '').toLowerCase();
+        const isQuotaOrLimit =
+          err instanceof AiRateLimitError ||
+          errMessage.includes('quota') ||
+          errMessage.includes('resource_exhausted') ||
+          errMessage.includes('rate limit') ||
+          errMessage.includes('too many requests') ||
+          errMessage.includes('429') ||
+          errMessage.includes('503') ||
+          errMessage.includes('unavailable') ||
+          errMessage.includes('high demand') ||
+          errMessage.includes('not found') ||
+          errMessage.includes('404');
+
+        if (isQuotaOrLimit && i < modelChain.length - 1) {
+          const nextModel = modelChain[i + 1];
+          logger.warn(
+            `[GeminiProvider] Quota/Limit reached on model "${currentModel}". Automatically falling back to "${nextModel}"...`
+          );
+          console.warn(
+            `⚠️ [GeminiProvider] Model "${currentModel}" quota/limit reached. Automatically failing over to next model "${nextModel}"...`
+          );
+          continue;
+        }
+
+        throw err;
+      }
+    }
+
+    throw lastError || new AiRateLimitError('All Gemini fallback models exhausted their quota');
+  }
+
   private extractUsage(usageMetadata?: any): TokenUsage {
     const inputTokens = usageMetadata?.promptTokenCount || 0;
     const outputTokens = usageMetadata?.candidatesTokenCount || 0;
@@ -133,99 +219,111 @@ export class GeminiProvider implements IAiProvider {
 
   public async generateText(options: GenerateTextOptions): Promise<GenerateTextResult> {
     const client = this.getClient();
-    const model = options.model || this.getModelName('strong');
+    const modelChain = this.getFallbackChain(options.model, 'strong');
 
-    return this.executeWithRetry(async () => {
-      const response = await client.models.generateContent({
-        model,
-        contents: options.prompt,
-        config: {
-          systemInstruction: options.systemPrompt,
-          temperature: options.temperature,
-          maxOutputTokens: options.maxOutputTokens,
-        },
-      });
+    return this.executeWithModelFallback(
+      modelChain,
+      async (currentModel) => {
+        const response = await client.models.generateContent({
+          model: currentModel,
+          contents: options.prompt,
+          config: {
+            systemInstruction: options.systemPrompt,
+            temperature: options.temperature,
+            maxOutputTokens: options.maxOutputTokens,
+          },
+        });
 
-      const candidate = response.candidates?.[0];
-      const finishReason = candidate?.finishReason;
+        const candidate = response.candidates?.[0];
+        const finishReason = candidate?.finishReason;
 
-      if (finishReason && finishReason !== 'STOP' && finishReason !== 'MAX_TOKENS') {
-        if (['SAFETY', 'RECITATION', 'BLOCKLIST', 'PROHIBITED_CONTENT', 'SPII'].includes(finishReason)) {
+        if (finishReason && finishReason !== 'STOP' && finishReason !== 'MAX_TOKENS') {
+          if (
+            ['SAFETY', 'RECITATION', 'BLOCKLIST', 'PROHIBITED_CONTENT', 'SPII'].includes(
+              finishReason
+            )
+          ) {
+            throw new AiBlockedContentError("The AI couldn't answer this one");
+          }
+        }
+
+        const text = response.text || '';
+        if (!text && finishReason !== 'STOP') {
           throw new AiBlockedContentError("The AI couldn't answer this one");
         }
-      }
 
-      const text = response.text || '';
-      if (!text && finishReason !== 'STOP') {
-        throw new AiBlockedContentError("The AI couldn't answer this one");
-      }
-
-      return {
-        text,
-        usage: this.extractUsage(response.usageMetadata),
-        finishReason,
-      };
-    }, options.timeoutMs);
+        return {
+          text,
+          usage: this.extractUsage(response.usageMetadata),
+          finishReason,
+        };
+      },
+      options.timeoutMs
+    );
   }
 
   public async streamText(options: StreamTextOptions): Promise<StreamTextResult> {
     const client = this.getClient();
-    const model = options.model || this.getModelName('strong');
+    const modelChain = this.getFallbackChain(options.model, 'strong');
 
-    return this.executeWithRetry(async () => {
-      // Build contents with optional chat history
-      const contents: any[] = [];
-      if (options.history && options.history.length > 0) {
-        for (const msg of options.history) {
-          contents.push({
-            role: msg.role === 'model' ? 'model' : 'user',
-            parts: [{ text: msg.content }],
-          });
+    return this.executeWithModelFallback(
+      modelChain,
+      async (currentModel) => {
+        // Build contents with optional chat history
+        const contents: any[] = [];
+        if (options.history && options.history.length > 0) {
+          for (const msg of options.history) {
+            contents.push({
+              role: msg.role === 'model' ? 'model' : 'user',
+              parts: [{ text: msg.content }],
+            });
+          }
         }
-      }
-      contents.push({
-        role: 'user',
-        parts: [{ text: options.prompt }],
-      });
+        contents.push({
+          role: 'user',
+          parts: [{ text: options.prompt }],
+        });
 
-      const responseStream = await client.models.generateContentStream({
-        model,
-        contents,
-        config: {
-          systemInstruction: options.systemPrompt,
-          temperature: options.temperature,
-          maxOutputTokens: options.maxOutputTokens,
-        },
-      });
+        const responseStream = await client.models.generateContentStream({
+          model: currentModel,
+          contents,
+          config: {
+            systemInstruction: options.systemPrompt,
+            temperature: options.temperature,
+            maxOutputTokens: options.maxOutputTokens,
+          },
+        });
 
-      let fullText = '';
-      let lastUsage: TokenUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
+        let fullText = '';
+        let lastUsage: TokenUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
 
-      for await (const chunk of responseStream) {
-        const chunkText = chunk.text || '';
-        if (chunkText) {
-          fullText += chunkText;
-          await options.onChunk(chunkText);
+        for await (const chunk of responseStream) {
+          const chunkText = chunk.text || '';
+          if (chunkText) {
+            fullText += chunkText;
+            await options.onChunk(chunkText);
+          }
+          if (chunk.usageMetadata) {
+            lastUsage = this.extractUsage(chunk.usageMetadata);
+          }
         }
-        if (chunk.usageMetadata) {
-          lastUsage = this.extractUsage(chunk.usageMetadata);
+
+        if (!fullText) {
+          throw new AiBlockedContentError("The AI couldn't answer this one");
         }
-      }
 
-      if (!fullText) {
-        throw new AiBlockedContentError("The AI couldn't answer this one");
-      }
-
-      return {
-        fullText,
-        usage: lastUsage,
-      };
-    }, options.timeoutMs);
+        return {
+          fullText,
+          usage: lastUsage,
+        };
+      },
+      options.timeoutMs
+    );
   }
 
   public async runToolCallingLoop(options: ToolLoopOptions): Promise<ToolLoopResult> {
     const client = this.getClient();
-    const model = options.model || this.getModelName('strong');
+    const modelChain = this.getFallbackChain(options.model, 'strong');
     const maxRounds = options.maxRounds || 6;
 
     // Convert tool declarations
@@ -239,7 +337,9 @@ export class GeminiProvider implements IAiProvider {
       },
     ];
 
-    return this.executeWithRetry(async () => {
+    return this.executeWithModelFallback(
+      modelChain,
+      async (currentModel) => {
       const contents: any[] = [];
 
       if (options.history && options.history.length > 0) {
@@ -265,7 +365,7 @@ export class GeminiProvider implements IAiProvider {
         rounds++;
 
         const response = await client.models.generateContent({
-          model,
+          model: currentModel,
           contents,
           config: {
             systemInstruction: options.systemPrompt,
@@ -367,11 +467,13 @@ export class GeminiProvider implements IAiProvider {
     options: StructuredJsonOptions<T>
   ): Promise<StructuredJsonResult<T>> {
     const client = this.getClient();
-    const model = options.model || this.getModelName('fast');
+    const modelChain = this.getFallbackChain(options.model, 'fast');
 
-    return this.executeWithRetry(async () => {
-      const response = await client.models.generateContent({
-        model,
+    return this.executeWithModelFallback(
+      modelChain,
+      async (currentModel) => {
+        const response = await client.models.generateContent({
+          model: currentModel,
         contents: options.prompt,
         config: {
           systemInstruction:
