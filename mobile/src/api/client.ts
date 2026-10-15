@@ -1,13 +1,17 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 import * as SecureStore from 'expo-secure-store';
 import { showToast } from '../components/Toast';
+import { getApiBaseUrl, getSocketBaseUrl, getServerUrl } from './serverConfig';
+
+// Prime cached URL on module load
+getServerUrl().catch(() => {});
 
 export const API_BASE_URL = (
-  process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000/api'
+  process.env.EXPO_PUBLIC_API_URL || 'https://crm-software-wbi9.onrender.com/api'
 ).replace(/\/+$/, '');
 
 export const SOCKET_URL = (
-  process.env.EXPO_PUBLIC_SOCKET_URL || 'http://localhost:5000'
+  process.env.EXPO_PUBLIC_SOCKET_URL || 'https://crm-software-wbi9.onrender.com'
 ).replace(/\/+$/, '');
 
 // In-memory token cache for high-performance requests
@@ -51,16 +55,18 @@ function generateMutationId(): string {
 }
 
 export const apiClient = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: getApiBaseUrl(),
   headers: {
     'Content-Type': 'application/json',
   },
   timeout: 15000,
 });
 
-// Request Interceptor: Attach Token & X-Client-Mutation-Id
+// Request Interceptor: Attach Token & X-Client-Mutation-Id & Dynamic BaseURL
 apiClient.interceptors.request.use(
   async (config: InternalAxiosRequestConfig) => {
+    // 0. Dynamically set base URL to ensure changes take effect immediately
+    config.baseURL = getApiBaseUrl();
     // 1. Resolve token from memory or SecureStore
     let token = memoryToken;
     if (!token) {

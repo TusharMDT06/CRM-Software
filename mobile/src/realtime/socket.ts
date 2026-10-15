@@ -1,9 +1,21 @@
 import { io, Socket } from 'socket.io-client';
-import { SOCKET_URL } from '../api/client';
+import { getSocketBaseUrl, onServerUrlChange } from '../api/serverConfig';
 
 let socketInstance: Socket | null = null;
+let currentToken: string | null = null;
+
+// Listen for server URL changes and automatically reconnect
+onServerUrlChange((newUrl) => {
+  if (currentToken && socketInstance) {
+    console.log('[Socket.IO Mobile] Server URL changed to:', newUrl, '- Reconnecting...');
+    disconnectSocket();
+    initSocket(currentToken);
+  }
+});
 
 export function initSocket(token: string): Socket {
+  currentToken = token;
+
   if (socketInstance && socketInstance.connected) {
     return socketInstance;
   }
@@ -13,7 +25,10 @@ export function initSocket(token: string): Socket {
     socketInstance = null;
   }
 
-  socketInstance = io(SOCKET_URL, {
+  const socketUrl = getSocketBaseUrl();
+  console.log('[Socket.IO Mobile] Connecting to:', socketUrl);
+
+  socketInstance = io(socketUrl, {
     auth: { token },
     transports: ['websocket', 'polling'],
     reconnectionAttempts: 10,
@@ -37,6 +52,7 @@ export function getSocket(): Socket | null {
 }
 
 export function disconnectSocket(): void {
+  currentToken = null;
   if (socketInstance) {
     socketInstance.disconnect();
     socketInstance = null;

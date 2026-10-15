@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken';
 import { User, IUser } from '../models/User.js';
 import { runWithTenantContext, getTenantContext } from '../utils/tenantContext.js';
 import { logger } from '../utils/logger.js';
-import { EntityChangedPayload, RealtimeEntityType, RealtimeActionType } from '@flowdesk/shared';
+import { EntityChangedPayload, RealtimeEntityType, RealtimeActionType } from '../types/index.js';
 
 let io: SocketIOServer | null = null;
 

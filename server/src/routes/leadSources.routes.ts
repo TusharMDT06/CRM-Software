@@ -2,12 +2,11 @@ import { Router, Response } from 'express';
 import { Types } from 'mongoose';
 import { z } from 'zod';
 import { authenticate } from '../middleware/auth.js';
-import { AuthRequest } from '../types/index.js';
+import { AuthRequest, LeadSourcesSummaryReport } from '../types/index.js';
 import { LeadSource } from '../models/LeadSource.js';
 import { Lead } from '../models/Lead.js';
 import { paginateQuery } from '../utils/paginationHelper.js';
 import { hasVersionConflict, sendConflictResponse } from '../utils/conflictHelper.js';
-import { LeadSourcesSummaryReport } from '@flowdesk/shared';
 
 export const leadSourcesRouter = Router();
 

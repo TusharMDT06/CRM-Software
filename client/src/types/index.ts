@@ -774,3 +774,27 @@ export interface SlaPolicy {
   isDefault: boolean;
 }
 
+export type RealtimeEntityType =
+  | 'lead'
+  | 'contact'
+  | 'account'
+  | 'deal'
+  | 'task'
+  | 'message'
+  | 'user'
+  | 'leadSource';
+
+export type RealtimeActionType = 'created' | 'updated' | 'deleted' | 'bulk';
+
+export interface EntityChangedPayload {
+  entity: RealtimeEntityType;
+  action: RealtimeActionType;
+  id?: string;
+  orgId: string;
+  actorId?: string;
+  clientMutationId?: string;
+  updatedAt?: string | Date;
+  data?: any;
+}
+
+

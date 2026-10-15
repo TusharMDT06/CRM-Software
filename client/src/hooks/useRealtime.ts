@@ -4,7 +4,7 @@ import { io, Socket } from 'socket.io-client';
 import { useAuth } from '../context/AuthContext.js';
 import { useToast } from '../context/ToastContext.js';
 import { isRecentMutationId } from '../api/client.js';
-import { EntityChangedPayload } from '@flowdesk/shared';
+import { EntityChangedPayload } from '../types/index.js';
 
 function resolveSocketUrl(): string {
   const customSocketUrl = import.meta.env.VITE_SOCKET_URL;

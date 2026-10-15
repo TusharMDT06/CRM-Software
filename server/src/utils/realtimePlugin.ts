@@ -1,5 +1,5 @@
 import { Schema } from 'mongoose';
-import { RealtimeEntityType } from '@flowdesk/shared';
+import { RealtimeEntityType } from '../types/index.js';
 import { emitChange } from '../realtime/socket.js';
 
 export function realtimePlugin(entity: RealtimeEntityType) {

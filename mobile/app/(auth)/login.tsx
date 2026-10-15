@@ -11,13 +11,15 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Mail, Lock, Eye, EyeOff, ArrowRight } from 'lucide-react-native';
+import { Mail, Lock, Eye, EyeOff, ArrowRight, Settings, Globe } from 'lucide-react-native';
 
 import { theme } from '../../src/theme';
 import { FloatingLogo } from '../../src/animations/FloatingLogo';
 import { PressableScale } from '../../src/animations/PressableScale';
 import { useAuth } from '../../src/auth/useAuth';
 import { showToast } from '../../src/components/Toast';
+import { ServerSettingsModal } from '../../src/components/ServerSettingsModal';
+import { getCachedServerUrl } from '../../src/api/serverConfig';
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -31,6 +33,7 @@ export default function LoginScreen() {
   const [isPasswordFocused, setIsPasswordFocused] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [showServerModal, setShowServerModal] = useState(false);
 
   const handleLogin = async () => {
     if (!email.trim() || !password) {
@@ -46,10 +49,16 @@ export default function LoginScreen() {
       showToast('Welcome back!', { type: 'success' });
       router.replace('/(tabs)');
     } catch (err: any) {
-      const msg =
-        err?.response?.data?.message ||
-        err?.message ||
-        'Invalid credentials. Please try again.';
+      const isNetwork =
+        err?.code === 'ERR_NETWORK' ||
+        err?.message?.toLowerCase().includes('network error') ||
+        err?.message?.toLowerCase().includes('timeout');
+
+      const msg = isNetwork
+        ? 'Network Error: Cannot connect to backend server. Tap "Server Settings" below to check or change your backend URL.'
+        : err?.response?.data?.message ||
+          err?.message ||
+          'Invalid credentials. Please try again.';
       setErrorMessage(msg);
       showToast(msg, { type: 'error' });
     } finally {
@@ -245,8 +254,39 @@ export default function LoginScreen() {
               </PressableScale>
             </View>
           </View>
+
+          {/* Server Settings Button in Card */}
+          <View style={styles.serverSettingsRow}>
+            <PressableScale
+              onPress={() => setShowServerModal(true)}
+              style={styles.serverSettingsBtn}
+            >
+              <Globe size={13} color={theme.colors.blue} style={{ marginRight: 6 }} />
+              <Text style={styles.serverSettingsText}>Backend Server Settings</Text>
+            </PressableScale>
+          </View>
+        </View>
+
+        {/* Floating Server Settings Status Pill */}
+        <View style={styles.bottomStatusRow}>
+          <PressableScale
+            onPress={() => setShowServerModal(true)}
+            style={styles.bottomStatusBtn}
+          >
+            <View style={styles.statusDot} />
+            <Text style={styles.bottomStatusText} numberOfLines={1}>
+              Server: {getCachedServerUrl()}
+            </Text>
+            <Settings size={12} color="rgba(255, 255, 255, 0.6)" style={{ marginLeft: 6 }} />
+          </PressableScale>
         </View>
       </ScrollView>
+
+      {/* Backend Server Connection Modal */}
+      <ServerSettingsModal
+        visible={showServerModal}
+        onClose={() => setShowServerModal(false)}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -454,5 +494,54 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: theme.typography.families.semiBold,
     fontWeight: '600',
+  },
+  serverSettingsRow: {
+    marginTop: 14,
+    alignItems: 'center',
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.divider,
+  },
+  serverSettingsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: theme.radii.badge,
+    backgroundColor: 'rgba(59, 130, 246, 0.08)',
+  },
+  serverSettingsText: {
+    fontSize: 12,
+    fontFamily: theme.typography.families.semiBold,
+    fontWeight: '600',
+    color: theme.colors.blue,
+  },
+  bottomStatusRow: {
+    alignItems: 'center',
+    marginTop: 20,
+    marginBottom: 8,
+  },
+  bottomStatusBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: theme.radii.chip,
+    maxWidth: '92%',
+  },
+  statusDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: '#10B981',
+    marginRight: 8,
+  },
+  bottomStatusText: {
+    fontSize: 11,
+    fontFamily: theme.typography.families.regular,
+    color: 'rgba(255, 255, 255, 0.8)',
   },
 });

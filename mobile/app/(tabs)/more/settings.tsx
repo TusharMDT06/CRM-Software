@@ -9,10 +9,15 @@ import { ScreenEntrance } from '../../../src/animations/ScreenEntrance';
 import { showToast } from '../../../src/components/Toast';
 import { useSessionStore } from '../../../src/auth/sessionStore';
 import { apiClient } from '../../../src/api/client';
+import { ServerSettingsModal } from '../../../src/components/ServerSettingsModal';
+import { getCachedServerUrl } from '../../../src/api/serverConfig';
+import { Globe, ChevronRight } from 'lucide-react-native';
+import { PressableScale } from '../../../src/animations/PressableScale';
 
 export default function SettingsScreen() {
   const { biometricEnabled, setBiometricEnabled } = useSessionStore();
   const queryClient = useQueryClient();
+  const [showServerModal, setShowServerModal] = useState(false);
 
   // 1. Fetch Notification Preferences
   const { data: prefData } = useQuery({
@@ -250,6 +255,43 @@ export default function SettingsScreen() {
             </View>
           </Card>
 
+          {/* Backend Server Connection */}
+          <Text style={styles.sectionTitle} maxFontSizeMultiplier={1.3}>Backend Server</Text>
+          <Card style={styles.card} padded={false}>
+            <PressableScale
+              onPress={() => setShowServerModal(true)}
+              style={[styles.row, { paddingVertical: 14 }]}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, gap: 10 }}>
+                <View
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 8,
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Globe size={18} color={theme.colors.blue} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.rowLabel} maxFontSizeMultiplier={1.3}>
+                    Server Connection
+                  </Text>
+                  <Text
+                    style={[styles.rowSub, { color: theme.colors.blue }]}
+                    numberOfLines={1}
+                    maxFontSizeMultiplier={1.3}
+                  >
+                    {getCachedServerUrl()}
+                  </Text>
+                </View>
+              </View>
+              <ChevronRight size={18} color={theme.colors.muted} />
+            </PressableScale>
+          </Card>
+
           {/* App Info */}
           <Text style={styles.sectionTitle} maxFontSizeMultiplier={1.3}>About</Text>
           <Card style={styles.card} padded={false}>
@@ -264,6 +306,11 @@ export default function SettingsScreen() {
           </Card>
         </ScrollView>
       </ScreenEntrance>
+
+      <ServerSettingsModal
+        visible={showServerModal}
+        onClose={() => setShowServerModal(false)}
+      />
     </View>
   );
 }

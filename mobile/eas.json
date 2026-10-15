@@ -19,16 +19,16 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "http://10.82.6.141:5000/api",
-        "EXPO_PUBLIC_SOCKET_URL": "http://10.82.6.141:5000"
+        "EXPO_PUBLIC_API_URL": "https://crm-software-wbi9.onrender.com/api",
+        "EXPO_PUBLIC_SOCKET_URL": "https://crm-software-wbi9.onrender.com"
       },
       "channel": "preview"
     },
     "production": {
       "distribution": "store",
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://api.flowdesk.crm/api",
-        "EXPO_PUBLIC_SOCKET_URL": "https://api.flowdesk.crm"
+        "EXPO_PUBLIC_API_URL": "https://crm-software-wbi9.onrender.com/api",
+        "EXPO_PUBLIC_SOCKET_URL": "https://crm-software-wbi9.onrender.com"
       },
       "channel": "production",
       "autoIncrement": true
