@@ -757,3 +757,219 @@ reportsRouter.get('/support', async (req: AuthRequest, res: Response) => {
   }
 });
 
+// =========================================================================
+// MOBILE & SPEC 2.1 AGGREGATION ENDPOINTS
+// =========================================================================
+
+// GET /reports/sales-trend?range=week|month|quarter|year
+reportsRouter.get('/sales-trend', async (req: AuthRequest, res: Response) => {
+  try {
+    const user = req.user!;
+    const ownerMatch = getOwnerMatch(user, req.query.owner as string);
+    const range = (req.query.range as string) || 'month';
+
+    const now = new Date();
+    let durationMs = 30 * 24 * 60 * 60 * 1000;
+    if (range === 'week') durationMs = 7 * 24 * 60 * 60 * 1000;
+    else if (range === 'quarter') durationMs = 90 * 24 * 60 * 60 * 1000;
+    else if (range === 'year') durationMs = 365 * 24 * 60 * 60 * 1000;
+
+    const currentFrom = new Date(now.getTime() - durationMs);
+    const prevFrom = new Date(currentFrom.getTime() - durationMs);
+
+    // Won deals in current period
+    const wonDealsCurrent = await Deal.find({
+      ...ownerMatch,
+      stage: 'won',
+      closedAt: { $gte: currentFrom, $lte: now },
+    }).sort({ closedAt: 1 });
+
+    const wonDealsPrevious = await Deal.find({
+      ...ownerMatch,
+      stage: 'won',
+      closedAt: { $gte: prevFrom, $lt: currentFrom },
+    });
+
+    const totalRevenue = wonDealsCurrent.reduce((sum, d) => sum + d.amount, 0);
+    const previousRevenue = wonDealsPrevious.reduce((sum, d) => sum + d.amount, 0);
+
+    let changePercent = 0;
+    if (previousRevenue > 0) {
+      changePercent = Math.round(((totalRevenue - previousRevenue) / previousRevenue) * 100);
+    } else if (totalRevenue > 0) {
+      changePercent = 100;
+    }
+
+    // Build trend interval buckets
+    const intervals: { key: string; start: Date; end: Date; label: string; amount: number; count: number }[] = [];
+
+    if (range === 'week') {
+      for (let i = 6; i >= 0; i--) {
+        const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i, 0, 0, 0, 0);
+        const end = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i, 23, 59, 59, 999);
+        const label = start.toLocaleDateString('en-US', { weekday: 'short' });
+        intervals.push({ key: start.toISOString().split('T')[0], start, end, label, amount: 0, count: 0 });
+      }
+    } else if (range === 'month') {
+      const stepDays = 3;
+      for (let i = 9; i >= 0; i--) {
+        const start = new Date(now.getTime() - (i * stepDays + stepDays) * 24 * 60 * 60 * 1000);
+        const end = new Date(now.getTime() - i * stepDays * 24 * 60 * 60 * 1000);
+        const label = `${end.getDate()} ${end.toLocaleDateString('en-US', { month: 'short' })}`;
+        intervals.push({ key: end.toISOString().split('T')[0], start, end, label, amount: 0, count: 0 });
+      }
+    } else {
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const monthsCount = range === 'quarter' ? 3 : 12;
+      for (let i = monthsCount - 1; i >= 0; i--) {
+        const start = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const end = new Date(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59, 999);
+        const label = `${monthNames[start.getMonth()]} ${range === 'year' ? start.getFullYear() : ''}`.trim();
+        intervals.push({ key: `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}`, start, end, label, amount: 0, count: 0 });
+      }
+    }
+
+    wonDealsCurrent.forEach((d) => {
+      if (!d.closedAt) return;
+      const cDate = new Date(d.closedAt);
+      const bucket = intervals.find((inv) => cDate >= inv.start && cDate <= inv.end);
+      if (bucket) {
+        bucket.amount += d.amount;
+        bucket.count += 1;
+      } else if (intervals.length > 0) {
+        if (cDate < intervals[0].start) {
+          intervals[0].amount += d.amount;
+          intervals[0].count += 1;
+        } else {
+          intervals[intervals.length - 1].amount += d.amount;
+          intervals[intervals.length - 1].count += 1;
+        }
+      }
+    });
+
+    const trend = intervals.map((inv) => ({
+      date: inv.key,
+      label: inv.label,
+      amount: inv.amount,
+      count: inv.count,
+    }));
+
+    res.json({
+      trend,
+      totalRevenue,
+      previousRevenue,
+      changePercent,
+    });
+  } catch (error: any) {
+    res.status(500).json({ message: error.message || 'Failed to fetch sales trend' });
+  }
+});
+
+// GET /reports/stage-analysis?range=week|month|quarter|year
+reportsRouter.get('/stage-analysis', async (req: AuthRequest, res: Response) => {
+  try {
+    const user = req.user!;
+    const ownerMatch = getOwnerMatch(user, req.query.owner as string);
+
+    const stages = ['qualified', 'proposal', 'negotiation', 'won', 'lost'];
+    const deals = await Deal.find(ownerMatch);
+
+    const totalDeals = deals.length;
+    const totalAmount = deals.reduce((sum, d) => sum + d.amount, 0);
+
+    const stagesBreakdown = stages.map((stage) => {
+      const stageDeals = deals.filter((d) => d.stage === stage);
+      const count = stageDeals.length;
+      const amount = stageDeals.reduce((sum, d) => sum + d.amount, 0);
+      const percentage = totalDeals > 0 ? Math.round((count / totalDeals) * 100) : 0;
+      return {
+        stage,
+        count,
+        amount,
+        percentage,
+      };
+    });
+
+    res.json({
+      stages: stagesBreakdown,
+      totalDeals,
+      totalAmount,
+    });
+  } catch (error: any) {
+    res.status(500).json({ message: error.message || 'Failed to fetch stage analysis' });
+  }
+});
+
+// GET /reports/kpis?range=week|month|quarter|year
+reportsRouter.get('/kpis', async (req: AuthRequest, res: Response) => {
+  try {
+    const user = req.user!;
+    const ownerMatch = getOwnerMatch(user, req.query.owner as string);
+    const range = (req.query.range as string) || 'month';
+
+    const now = new Date();
+    let durationMs = 30 * 24 * 60 * 60 * 1000;
+    if (range === 'week') durationMs = 7 * 24 * 60 * 60 * 1000;
+    else if (range === 'quarter') durationMs = 90 * 24 * 60 * 60 * 1000;
+    else if (range === 'year') durationMs = 365 * 24 * 60 * 60 * 1000;
+
+    const currStart = new Date(now.getTime() - durationMs);
+    const prevStart = new Date(currStart.getTime() - durationMs);
+
+    // Current period deals
+    const [wonCurr, closedCurr, wonPrev, closedPrev] = await Promise.all([
+      Deal.find({ ...ownerMatch, stage: 'won', closedAt: { $gte: currStart, $lte: now } }),
+      Deal.find({ ...ownerMatch, stage: { $in: ['won', 'lost'] }, closedAt: { $gte: currStart, $lte: now } }),
+      Deal.find({ ...ownerMatch, stage: 'won', closedAt: { $gte: prevStart, $lt: currStart } }),
+      Deal.find({ ...ownerMatch, stage: { $in: ['won', 'lost'] }, closedAt: { $gte: prevStart, $lt: currStart } }),
+    ]);
+
+    // 1. Win Rate
+    const currWinRate = closedCurr.length > 0 ? Math.round((wonCurr.length / closedCurr.length) * 100) : 0;
+    const prevWinRate = closedPrev.length > 0 ? Math.round((wonPrev.length / closedPrev.length) * 100) : 0;
+    const winRateDelta = currWinRate - prevWinRate;
+
+    // 2. Average Deal Size
+    const currTotalRev = wonCurr.reduce((sum, d) => sum + d.amount, 0);
+    const prevTotalRev = wonPrev.reduce((sum, d) => sum + d.amount, 0);
+
+    const currAvgDeal = wonCurr.length > 0 ? Math.round(currTotalRev / wonCurr.length) : 0;
+    const prevAvgDeal = wonPrev.length > 0 ? Math.round(prevTotalRev / wonPrev.length) : 0;
+    const avgDealSizeDelta = prevAvgDeal > 0 ? Math.round(((currAvgDeal - prevAvgDeal) / prevAvgDeal) * 100) : (currAvgDeal > 0 ? 100 : 0);
+
+    // 3. Sales Cycle (days from createdAt to closedAt)
+    let currCycleDaysTotal = 0;
+    wonCurr.forEach((d) => {
+      if (d.closedAt) {
+        const diffMs = new Date(d.closedAt).getTime() - new Date(d.createdAt).getTime();
+        currCycleDaysTotal += Math.max(1, Math.round(diffMs / (24 * 60 * 60 * 1000)));
+      }
+    });
+    const salesCycleDays = wonCurr.length > 0 ? Math.round(currCycleDaysTotal / wonCurr.length) : 14;
+
+    let prevCycleDaysTotal = 0;
+    wonPrev.forEach((d) => {
+      if (d.closedAt) {
+        const diffMs = new Date(d.closedAt).getTime() - new Date(d.createdAt).getTime();
+        prevCycleDaysTotal += Math.max(1, Math.round(diffMs / (24 * 60 * 60 * 1000)));
+      }
+    });
+    const prevCycleDays = wonPrev.length > 0 ? Math.round(prevCycleDaysTotal / wonPrev.length) : salesCycleDays;
+    const salesCycleDelta = salesCycleDays - prevCycleDays;
+
+    res.json({
+      winRate: currWinRate,
+      winRateDelta,
+      averageDealSize: currAvgDeal,
+      averageDealSizeDelta: avgDealSizeDelta,
+      salesCycleDays,
+      salesCycleDelta,
+      totalWonDeals: wonCurr.length,
+      totalClosedDeals: closedCurr.length,
+    });
+  } catch (error: any) {
+    res.status(500).json({ message: error.message || 'Failed to fetch KPIs' });
+  }
+});
+
+

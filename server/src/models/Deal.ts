@@ -1,5 +1,6 @@
 import mongoose, { Document, Schema, Types } from 'mongoose';
 import { tenantPlugin } from '../utils/tenantPlugin.js';
+import { realtimePlugin } from '../utils/realtimePlugin.js';
 
 export type DealStage = 'qualified' | 'proposal' | 'negotiation' | 'won' | 'lost';
 
@@ -16,7 +17,7 @@ export interface IDeal extends Document {
   tenantId: Types.ObjectId;
   title: string;
   account: Types.ObjectId;
-  contact: Types.ObjectId;
+  contact?: Types.ObjectId;
   amount: number;
   stage: DealStage;
   expectedClose: Date;
@@ -51,7 +52,7 @@ const DealSchema = new Schema<IDeal>(
     contact: {
       type: Schema.Types.ObjectId,
       ref: 'Contact',
-      required: true,
+      required: false,
       index: true,
     },
     amount: {
@@ -127,5 +128,6 @@ DealSchema.pre('save', function (next) {
 });
 
 DealSchema.plugin(tenantPlugin);
+DealSchema.plugin(realtimePlugin('deal'));
 
 export const Deal = mongoose.model<IDeal>('Deal', DealSchema);

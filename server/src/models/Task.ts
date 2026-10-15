@@ -1,8 +1,10 @@
 import mongoose, { Document, Schema, Types } from 'mongoose';
 import { tenantPlugin } from '../utils/tenantPlugin.js';
+import { realtimePlugin } from '../utils/realtimePlugin.js';
 
 export type TaskStatus = 'open' | 'done';
 export type TaskPriority = 'low' | 'medium' | 'high';
+export type TaskType = 'call' | 'email' | 'meeting' | 'document' | 'todo';
 
 export interface ITask extends Document {
   _id: Types.ObjectId;
@@ -12,6 +14,7 @@ export interface ITask extends Document {
   dueDate: Date;
   status: TaskStatus;
   priority: TaskPriority;
+  type: TaskType;
   deal?: Types.ObjectId | null;
   owner: Types.ObjectId;
   createdAt: Date;
@@ -48,6 +51,13 @@ const TaskSchema = new Schema<ITask>(
       required: true,
       index: true,
     },
+    type: {
+      type: String,
+      enum: ['call', 'email', 'meeting', 'document', 'todo'],
+      default: 'todo',
+      required: true,
+      index: true,
+    },
     deal: {
       type: Schema.Types.ObjectId,
       ref: 'Deal',
@@ -68,5 +78,6 @@ const TaskSchema = new Schema<ITask>(
 
 TaskSchema.index({ name: 'text', description: 'text' });
 TaskSchema.plugin(tenantPlugin);
+TaskSchema.plugin(realtimePlugin('task'));
 
 export const Task = mongoose.model<ITask>('Task', TaskSchema);

@@ -14,6 +14,8 @@ import { checkSeatLimit } from '../utils/planLimits.js';
 import { runWithTenantContext } from '../utils/tenantContext.js';
 import { recordAudit } from '../utils/auditLogger.js';
 import { sendEmailDirect } from '../utils/notificationService.js';
+import { Device } from '../models/Device.js';
+import { emitSessionRevoked } from '../realtime/socket.js';
 
 export const usersRouter = Router();
 
@@ -243,6 +245,11 @@ usersRouter.patch(
 
       await user.save();
 
+      // Revoke session immediately if user deactivated or role changed
+      if (active === false || (role && role !== beforeUser.role)) {
+        emitSessionRevoked(user._id.toString(), 'Your role or account status has been updated');
+      }
+
       await recordAudit({
         actor: req.user!._id,
         actorName: req.user!.name,
@@ -269,3 +276,86 @@ usersRouter.patch(
     }
   }
 );
+
+// =========================================================================
+// DEVICE REGISTRATION ENDPOINTS (Spec 2.5 & 6)
+// =========================================================================
+
+// POST /users/me/devices (or /api/users/me/devices)
+usersRouter.post('/me/devices', async (req: AuthRequest, res: Response) => {
+  try {
+    const user = req.user!;
+    const { expoPushToken, platform, appVersion } = req.body;
+
+    if (!expoPushToken || typeof expoPushToken !== 'string') {
+      res.status(400).json({ message: 'expoPushToken is required' });
+      return;
+    }
+
+    const device = await Device.findOneAndUpdate(
+      {
+        tenantId: user.tenantId,
+        user: user._id,
+        expoPushToken: expoPushToken.trim(),
+      },
+      {
+        platform: platform || 'android',
+        appVersion: appVersion || '',
+        updatedAt: new Date(),
+      },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+
+    res.status(200).json({
+      success: true,
+      device: {
+        _id: device._id,
+        expoPushToken: device.expoPushToken,
+        platform: device.platform,
+        appVersion: device.appVersion,
+      },
+    });
+  } catch (error: any) {
+    res.status(500).json({ message: error.message || 'Failed to register device' });
+  }
+});
+
+// GET /users/me/devices
+usersRouter.get('/me/devices', async (req: AuthRequest, res: Response) => {
+  try {
+    const user = req.user!;
+    const devices = await Device.find({ user: user._id }).sort({ updatedAt: -1 });
+    res.json({ devices });
+  } catch (error: any) {
+    res.status(500).json({ message: error.message || 'Failed to fetch devices' });
+  }
+});
+
+// DELETE /users/me/devices/:token
+usersRouter.delete('/me/devices/:token', async (req: AuthRequest, res: Response) => {
+  try {
+    const user = req.user!;
+    const token = req.params.token;
+    await Device.deleteOne({ user: user._id, expoPushToken: token });
+    res.json({ success: true, message: 'Device unregistered successfully' });
+  } catch (error: any) {
+    res.status(500).json({ message: error.message || 'Failed to unregister device' });
+  }
+});
+
+// DELETE /users/me/devices (unregisters by body/query token or all on logout)
+usersRouter.delete('/me/devices', async (req: AuthRequest, res: Response) => {
+  try {
+    const user = req.user!;
+    const token = (req.body?.expoPushToken || req.query.expoPushToken) as string;
+    if (token) {
+      await Device.deleteOne({ user: user._id, expoPushToken: token.trim() });
+    } else {
+      await Device.deleteMany({ user: user._id });
+    }
+    res.json({ success: true, message: 'Device(s) unregistered successfully' });
+  } catch (error: any) {
+    res.status(500).json({ message: error.message || 'Failed to unregister device' });
+  }
+});
+

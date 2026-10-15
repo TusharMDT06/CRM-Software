@@ -24,6 +24,10 @@ export type NotificationType =
   | 'deal_risk_high'
   | 'lead_assigned'
   | 'lead_repeat_inquiry'
+  | 'deal_stage_changed'
+  | 'inbound_sms'
+  | 'mention'
+  | 'new_lead'
   | 'general';
 
 export interface INotification extends Document {

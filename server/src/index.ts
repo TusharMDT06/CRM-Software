@@ -1,8 +1,11 @@
+import http from 'http';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import mongoose from 'mongoose';
 import crypto from 'crypto';
+import path from 'path';
+import fs from 'fs';
 import { env } from './config/env.js';
 import { connectDB } from './config/db.js';
 import { logger } from './utils/logger.js';
@@ -32,11 +35,17 @@ import { supportPortalRouter } from './routes/supportPortal.routes.js';
 import { aiRouter } from './routes/ai.routes.js';
 import { marketingRouter } from './routes/marketing.routes.js';
 import { webhooksRouter } from './routes/webhooks.routes.js';
+import { syncRouter } from './routes/sync.routes.js';
+import { messagesRouter, inboundSmsRouter } from './routes/messages.routes.js';
+import { leadSourcesRouter } from './routes/leadSources.routes.js';
+import { initSocketIO } from './realtime/socket.js';
+import { idempotencyMiddleware } from './middleware/idempotency.js';
 import { registerWorkflowListeners } from './utils/workflowEngine.js';
 import { initCronJobs } from './utils/scheduler.js';
 import { errorHandler } from './middleware/errorHandler.js';
 
 const app = express();
+const server = http.createServer(app);
 const PORT = env.PORT || 5000;
 
 // Security & Middlewares
@@ -100,6 +109,19 @@ app.use((req, res, next) => {
   next();
 });
 
+// Direct APK download route for mobile installation
+app.get('/FlowDesk.apk', (_req, res) => {
+  const apkPath = path.resolve('../FlowDesk.apk');
+  if (fs.existsSync(apkPath)) {
+    res.download(apkPath, 'FlowDesk.apk');
+  } else {
+    res.status(404).send('FlowDesk.apk not found. Please build the APK first.');
+  }
+});
+
+// Idempotency Middleware for mutating client requests (X-Client-Mutation-Id)
+app.use(idempotencyMiddleware);
+
 // Health check endpoints (available at both root and /api for all cloud providers)
 const registerHealthEndpoints = (prefix: string) => {
   app.get(`${prefix}/health`, (_req, res) => {
@@ -148,6 +170,9 @@ const registerBusinessRoutes = (prefix: string) => {
   app.use(`${prefix}/support`, supportPortalRouter);
   app.use(`${prefix}/ai`, aiRouter);
   app.use(`${prefix}/marketing`, marketingRouter);
+  app.use(`${prefix}/sync`, syncRouter);
+  app.use(`${prefix}/messages`, messagesRouter);
+  app.use(`${prefix}/lead-sources`, leadSourcesRouter);
   app.use(`${prefix}/hooks`, webhooksRouter);
 };
 
@@ -156,6 +181,8 @@ registerBusinessRoutes('');
 
 app.use('/hooks', webhooksRouter);
 app.use('/f', webhooksRouter);
+app.use('/hooks/sms', inboundSmsRouter);
+app.use('/api/hooks/sms', inboundSmsRouter);
 
 // 404 handler for API routes
 app.use('/api/*', (_req, res) => {
@@ -176,8 +203,11 @@ async function startServer() {
     // Initialize background cron schedules
     initCronJobs();
 
-    app.listen(PORT, () => {
-      logger.info(`[Flowdesk Server] Running on http://localhost:${PORT}`);
+    // Initialize Socket.IO realtime server
+    initSocketIO(server);
+
+    server.listen(PORT, () => {
+      logger.info(`[Flowdesk Server] Running with Socket.IO on http://localhost:${PORT}`);
     });
   } catch (error) {
     logger.error('[Flowdesk Server] Failed to start:', error);
@@ -190,9 +220,17 @@ async function startServer() {
   }
 }
 
+process.on('unhandledRejection', (reason) => {
+  logger.error('[Flowdesk Server] Unhandled Rejection:', reason);
+});
+process.on('uncaughtException', (error) => {
+  logger.error('[Flowdesk Server] Uncaught Exception:', error);
+});
+
 if (process.env.NODE_ENV !== 'test' && !process.env.FLOWDESK_TEST) {
   startServer();
 }
 
-// Export app for tests and server deployment
+// Export app and server for tests and server deployment
+export { server };
 export default app;

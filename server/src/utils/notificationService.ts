@@ -7,6 +7,8 @@ import {
 } from '../models/NotificationPreference.js';
 import { User, IUser } from '../models/User.js';
 import { runWithTenantContext, getCurrentTenantId } from './tenantContext.js';
+import { emitNotificationNew } from '../realtime/socket.js';
+import { sendExpoPushNotifications } from '../services/pushNotificationService.js';
 
 export interface CreateNotificationParams {
   userId: Types.ObjectId | string;
@@ -96,7 +98,7 @@ export async function sendNotification(params: CreateNotificationParams): Promis
 
     // 4. In-App Notification
     if (typePref.inApp) {
-      await Notification.create({
+      const createdNotification = await Notification.create({
         user: targetUser._id,
         type,
         title,
@@ -106,6 +108,18 @@ export async function sendNotification(params: CreateNotificationParams): Promis
         entityId: entityId || '',
         createdAt: new Date(),
       });
+
+      // Realtime in-app notification emit
+      emitNotificationNew(targetUser._id.toString(), createdNotification.toObject());
+
+      // Send Expo Push notification to mobile devices (asynchronously)
+      sendExpoPushNotifications({
+        userIds: [targetUser._id],
+        title,
+        body,
+        data: { link, entityType, entityId },
+        type,
+      }).catch(() => {});
     }
 
     // 5. Email Notification

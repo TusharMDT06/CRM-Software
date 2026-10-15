@@ -1,5 +1,6 @@
 import mongoose, { Document, Schema, Types } from 'mongoose';
 import { tenantPlugin } from '../utils/tenantPlugin.js';
+import { realtimePlugin } from '../utils/realtimePlugin.js';
 
 export interface IContact extends Document {
   _id: Types.ObjectId;
@@ -69,5 +70,6 @@ const ContactSchema = new Schema<IContact>(
 
 ContactSchema.index({ firstName: 'text', lastName: 'text', email: 'text' });
 ContactSchema.plugin(tenantPlugin);
+ContactSchema.plugin(realtimePlugin('contact'));
 
 export const Contact = mongoose.model<IContact>('Contact', ContactSchema);

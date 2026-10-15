@@ -160,17 +160,23 @@ export const DealDetailPage: React.FC = () => {
         stage: deal.stage,
         expectedClose: deal.expectedClose ? deal.expectedClose.slice(0, 10) : '',
         account:
-          typeof deal.account === 'object'
+          typeof deal.account === 'object' && deal.account
             ? (deal.account as any)._id
-            : (deal.account as string),
+            : typeof deal.account === 'string'
+            ? deal.account
+            : '',
         contact:
-          typeof deal.contact === 'object'
+          typeof deal.contact === 'object' && deal.contact
             ? (deal.contact as any)._id
-            : (deal.contact as string),
+            : typeof deal.contact === 'string'
+            ? deal.contact
+            : '',
         owner:
-          typeof deal.owner === 'object'
+          typeof deal.owner === 'object' && deal.owner
             ? (deal.owner as User)._id
-            : (deal.owner as string),
+            : typeof deal.owner === 'string'
+            ? deal.owner
+            : '',
         custom: deal.custom || {},
       });
     }

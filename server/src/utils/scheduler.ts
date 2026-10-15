@@ -152,7 +152,33 @@ export async function runPeriodicChecks(): Promise<void> {
                 type: 'task_overdue',
                 title: `Task overdue: ${task.title}`,
                 body: `Your task "${task.title}" was due on ${new Date(task.dueDate).toLocaleDateString()}.`,
-                link: '/tasks',
+                link: `/tasks/${task._id}`,
+                entityType: 'task',
+                entityId: task._id.toString(),
+              });
+            }
+          }
+        }
+
+        // 4. Tasks due in 30 minutes for this tenant
+        const in30Minutes = new Date(now.getTime() + 30 * 60 * 1000);
+        const dueSoonTasks = await Task.find({
+          status: 'open',
+          dueDate: { $gte: now, $lte: in30Minutes },
+        });
+
+        for (const task of dueSoonTasks) {
+          const cacheKey = `task_due_30m:${task._id}`;
+          if (!firedOverdueCache.has(cacheKey)) {
+            firedOverdueCache.add(cacheKey);
+
+            if (task.owner) {
+              await sendNotification({
+                userId: task.owner,
+                type: 'task_due_today',
+                title: `Task due in 30 min: ${task.title}`,
+                body: `Your task "${task.title}" is due soon.`,
+                link: `/tasks/${task._id}`,
                 entityType: 'task',
                 entityId: task._id.toString(),
               });
@@ -196,7 +222,7 @@ export async function runDailyMorningTasks(): Promise<void> {
               type: 'task_due_today',
               title: `Task due today: ${task.title}`,
               body: `You have a task scheduled for completion today.`,
-              link: '/tasks',
+              link: `/tasks/${task._id}`,
               entityType: 'task',
               entityId: task._id.toString(),
             });

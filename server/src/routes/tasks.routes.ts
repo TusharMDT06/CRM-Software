@@ -8,6 +8,8 @@ import { taskSchema, taskUpdateSchema } from '../validations/index.js';
 import { AuthRequest } from '../types/index.js';
 import { buildOwnerFilter, parseSort } from '../utils/queryHelper.js';
 import { logActivity } from '../utils/activityHelper.js';
+import { paginateQuery } from '../utils/paginationHelper.js';
+import { hasVersionConflict, sendConflictResponse } from '../utils/conflictHelper.js';
 
 export const tasksRouter = Router();
 
@@ -17,9 +19,6 @@ tasksRouter.use(authenticate);
 tasksRouter.get('/', async (req: AuthRequest, res: Response) => {
   try {
     const user = req.user!;
-    const page = Math.max(1, parseInt(req.query.page as string) || 1);
-    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 10));
-    const skip = (page - 1) * limit;
 
     const query: FilterQuery<any> = {
       ...buildOwnerFilter(user, req.query.owner as string),
@@ -30,6 +29,9 @@ tasksRouter.get('/', async (req: AuthRequest, res: Response) => {
     }
     if (req.query.priority) {
       query.priority = req.query.priority;
+    }
+    if (req.query.type) {
+      query.type = req.query.type;
     }
     if (req.query.deal) {
       query.deal = req.query.deal;
@@ -43,27 +45,16 @@ tasksRouter.get('/', async (req: AuthRequest, res: Response) => {
       ];
     }
 
-    const sort = parseSort(req.query.sort as string || 'dueDate:asc');
-
-    const [data, total] = await Promise.all([
-      Task.find(query)
-        .populate('deal', 'title stage amount')
-        .populate('owner', 'name email role')
-        .sort(sort)
-        .skip(skip)
-        .limit(limit),
-      Task.countDocuments(query),
-    ]);
-
-    res.json({
-      data,
-      pagination: {
-        total,
-        page,
-        limit,
-        totalPages: Math.ceil(total / limit) || 1,
-      },
+    const result = await paginateQuery(Task, query, req.query, {
+      populate: [
+        { path: 'deal', select: 'title stage amount' },
+        { path: 'owner', select: 'name email role' },
+      ],
+      defaultSort: { dueDate: 1 },
+      defaultLimit: 10,
     });
+
+    res.json(result);
   } catch (error: any) {
     res.status(500).json({ message: error.message || 'Failed to fetch tasks' });
   }
@@ -139,6 +130,13 @@ tasksRouter.patch('/:id', validateBody(taskUpdateSchema), async (req: AuthReques
 
     if (req.body.deal === '') {
       req.body.deal = null;
+    }
+
+    if (hasVersionConflict(task, req.body)) {
+      await task.populate('deal', 'title stage amount');
+      await task.populate('owner', 'name email role');
+      sendConflictResponse(res, task);
+      return;
     }
 
     const oldStatus = task.status;

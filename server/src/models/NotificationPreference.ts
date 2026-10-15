@@ -39,6 +39,10 @@ export const DEFAULT_PREFERENCES: Record<NotificationType, ITypePreference> = {
   deal_risk_high: { inApp: true, email: false },
   lead_assigned: { inApp: true, email: true },
   lead_repeat_inquiry: { inApp: true, email: true },
+  deal_stage_changed: { inApp: true, email: false },
+  inbound_sms: { inApp: true, email: false },
+  mention: { inApp: true, email: false },
+  new_lead: { inApp: true, email: true },
   general: { inApp: true, email: false },
 };
 

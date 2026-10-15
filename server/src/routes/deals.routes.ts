@@ -11,6 +11,9 @@ import { buildOwnerFilter, parseSort } from '../utils/queryHelper.js';
 import { validateCustomFields } from '../utils/customFields.js';
 import { logActivity } from '../utils/activityHelper.js';
 import { toCSV } from '../utils/csvHelper.js';
+import { paginateQuery } from '../utils/paginationHelper.js';
+import { hasVersionConflict, sendConflictResponse } from '../utils/conflictHelper.js';
+import { sendNotification } from '../utils/notificationService.js';
 
 export const dealsRouter = Router();
 
@@ -43,33 +46,20 @@ function buildDealQuery(user: any, queryParams: any): FilterQuery<any> {
 dealsRouter.get('/', async (req: AuthRequest, res: Response) => {
   try {
     const user = req.user!;
-    const page = Math.max(1, parseInt(req.query.page as string) || 1);
-    const limit = Math.min(200, Math.max(1, parseInt(req.query.limit as string) || 25));
-    const skip = (page - 1) * limit;
-
     const query = buildDealQuery(user, req.query);
-    const sort = parseSort(req.query.sort as string);
 
-    const [data, total] = await Promise.all([
-      Deal.find(query)
-        .populate('account', 'name industry')
-        .populate('contact', 'firstName lastName email phone')
-        .populate('owner', 'name email role')
-        .sort(sort)
-        .skip(skip)
-        .limit(limit),
-      Deal.countDocuments(query),
-    ]);
-
-    res.json({
-      data,
-      pagination: {
-        total,
-        page,
-        limit,
-        totalPages: Math.ceil(total / limit) || 1,
-      },
+    const result = await paginateQuery(Deal, query, req.query, {
+      populate: [
+        { path: 'account', select: 'name industry' },
+        { path: 'contact', select: 'firstName lastName email phone' },
+        { path: 'owner', select: 'name email role' },
+      ],
+      defaultSort: { createdAt: -1 },
+      defaultLimit: 25,
+      maxLimit: 200,
     });
+
+    res.json(result);
   } catch (error: any) {
     res.status(500).json({ message: error.message || 'Failed to fetch deals' });
   }
@@ -182,6 +172,10 @@ dealsRouter.post('/', requireWithinRecordLimit, validateBody(dealSchema), async 
       dealData.owner = user._id;
     }
 
+    if (!dealData.contact) {
+      delete dealData.contact;
+    }
+
     if (dealData.stage === 'won' || dealData.stage === 'lost') {
       dealData.closedAt = new Date();
     } else {
@@ -201,6 +195,20 @@ dealsRouter.post('/', requireWithinRecordLimit, validateBody(dealSchema), async 
       entityId: deal._id,
       createdBy: user._id,
     });
+
+    const dealOwnerId = (deal.owner as any)?._id || deal.owner;
+    if (dealOwnerId && !dealOwnerId.equals(user._id)) {
+      sendNotification({
+        userId: dealOwnerId,
+        actorId: user._id,
+        type: 'deal_assigned',
+        title: `Deal Assigned: ${deal.title}`,
+        body: `You were assigned deal "${deal.title}"`,
+        link: `/deals/${deal._id}`,
+        entityType: 'deal',
+        entityId: deal._id.toString(),
+      }).catch(() => {});
+    }
 
     res.status(201).json(deal);
   } catch (error: any) {
@@ -228,6 +236,7 @@ dealsRouter.patch('/:id', validateBody(dealUpdateSchema), async (req: AuthReques
     }
 
     const oldStage = deal.stage;
+    const previousOwner = deal.owner ? deal.owner.toString() : '';
 
     // Check if stage is changing to update closedAt
     if (req.body.stage !== undefined) {
@@ -249,13 +258,25 @@ dealsRouter.patch('/:id', validateBody(dealUpdateSchema), async (req: AuthReques
       req.body.custom = { ...(deal.custom || {}), ...cf.cleanData };
     }
 
+    if (hasVersionConflict(deal, req.body)) {
+      await deal.populate('account', 'name industry');
+      await deal.populate('contact', 'firstName lastName email phone');
+      await deal.populate('owner', 'name email role');
+      sendConflictResponse(res, deal);
+      return;
+    }
+
+    if (req.body.contact === '') {
+      req.body.contact = null;
+    }
+
     Object.assign(deal, req.body);
     await deal.save();
     await deal.populate('account', 'name industry');
     await deal.populate('contact', 'firstName lastName email phone');
     await deal.populate('owner', 'name email role');
 
-    // Stage change activity
+    // Stage change notification on my deals
     if (req.body.stage && req.body.stage !== oldStage) {
       await logActivity({
         type: 'stage_change',
@@ -265,6 +286,34 @@ dealsRouter.patch('/:id', validateBody(dealUpdateSchema), async (req: AuthReques
         entityId: deal._id,
         createdBy: user._id,
       });
+
+      const currentDealOwner = (deal.owner as any)?._id || deal.owner;
+      if (currentDealOwner && !currentDealOwner.equals(user._id)) {
+        sendNotification({
+          userId: currentDealOwner,
+          actorId: user._id,
+          type: 'deal_stage_changed',
+          title: `Deal Stage: ${deal.title}`,
+          body: `Moved from ${oldStage} to ${deal.stage}`,
+          link: `/deals/${deal._id}`,
+          entityType: 'deal',
+          entityId: deal._id.toString(),
+        }).catch(() => {});
+      }
+    }
+
+    // Owner reassignment notification
+    if (req.body.owner && previousOwner && previousOwner !== req.body.owner.toString()) {
+      sendNotification({
+        userId: req.body.owner,
+        actorId: user._id,
+        type: 'deal_assigned',
+        title: `Deal Assigned: ${deal.title}`,
+        body: `You were assigned deal "${deal.title}"`,
+        link: `/deals/${deal._id}`,
+        entityType: 'deal',
+        entityId: deal._id.toString(),
+      }).catch(() => {});
     }
 
     res.json(deal);

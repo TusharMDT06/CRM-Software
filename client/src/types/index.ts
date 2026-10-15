@@ -58,6 +58,7 @@ export interface Lead {
   custom?: Record<string, any>;
   owner: User | string;
   aiScore?: LeadScore;
+  rating?: 'hot' | 'warm' | 'cold';
   // Phase 5: Marketing Attribution additions
   channel?: MarketingChannel;
   campaign?: {
@@ -219,7 +220,7 @@ export interface Deal {
   _id: string;
   title: string;
   account: Account | { _id: string; name: string; industry: string };
-  contact: Contact | { _id: string; firstName: string; lastName: string; email: string; phone: string };
+  contact?: (Contact | { _id: string; firstName: string; lastName: string; email: string; phone: string }) | null;
   amount: number;
   stage: DealStage;
   expectedClose: string;
@@ -233,6 +234,7 @@ export interface Deal {
 
 export type TaskStatus = 'open' | 'done';
 export type TaskPriority = 'low' | 'medium' | 'high';
+export type TaskType = 'call' | 'email' | 'meeting' | 'document' | 'todo';
 
 export interface Task {
   _id: string;
@@ -241,6 +243,7 @@ export interface Task {
   dueDate: string;
   status: TaskStatus;
   priority: TaskPriority;
+  type?: TaskType;
   deal?: Deal | { _id: string; title: string; stage: string; amount: number } | null;
   owner: User | string;
   createdAt: string;

@@ -7,4 +7,5 @@ export interface AuthRequest extends Request {
   tenant?: ITenant;
   isImpersonating?: boolean;
   requestId?: string;
+  clientMutationId?: string;
 }

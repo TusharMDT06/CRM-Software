@@ -65,6 +65,7 @@ export const leadSchema = z.object({
   company: z.string().trim().min(1, 'Company is required'),
   source: z.enum(['website', 'referral', 'social', 'email', 'event', 'other']).default('website'),
   status: z.enum(['new', 'contacted', 'qualified', 'converted', 'lost']).default('new'),
+  rating: z.enum(['hot', 'warm', 'cold']).default('warm'),
   value: z.coerce.number().min(0, 'Value must be positive').default(0),
   notes: z.string().trim().optional().default(''),
   custom: z.record(z.any()).optional().default({}),
@@ -117,7 +118,10 @@ export const leadSchema = z.object({
   isTest: z.boolean().optional().default(false),
 });
 
-export const leadUpdateSchema = leadSchema.partial();
+export const leadUpdateSchema = leadSchema.partial().extend({
+  updatedAt: z.string().or(z.date()).optional(),
+  version: z.number().optional(),
+});
 
 export const accountSchema = z.object({
   name: z.string().trim().min(1, 'Account name is required'),
@@ -130,7 +134,10 @@ export const accountSchema = z.object({
   owner: z.string().optional(),
 });
 
-export const accountUpdateSchema = accountSchema.partial();
+export const accountUpdateSchema = accountSchema.partial().extend({
+  updatedAt: z.string().or(z.date()).optional(),
+  version: z.number().optional(),
+});
 
 export const contactSchema = z.object({
   firstName: z.string().trim().min(1, 'First name is required'),
@@ -143,12 +150,15 @@ export const contactSchema = z.object({
   owner: z.string().optional(),
 });
 
-export const contactUpdateSchema = contactSchema.partial();
+export const contactUpdateSchema = contactSchema.partial().extend({
+  updatedAt: z.string().or(z.date()).optional(),
+  version: z.number().optional(),
+});
 
 export const dealSchema = z.object({
   title: z.string().trim().min(1, 'Deal title is required'),
   account: z.string().min(1, 'Account is required'),
-  contact: z.string().min(1, 'Contact is required'),
+  contact: z.string().optional().nullable(),
   amount: z.coerce.number().min(0, 'Amount must be positive').default(0),
   stage: z.enum(['qualified', 'proposal', 'negotiation', 'won', 'lost']).default('qualified'),
   expectedClose: z.string().or(z.date()),
@@ -156,7 +166,10 @@ export const dealSchema = z.object({
   owner: z.string().optional(),
 });
 
-export const dealUpdateSchema = dealSchema.partial();
+export const dealUpdateSchema = dealSchema.partial().extend({
+  updatedAt: z.string().or(z.date()).optional(),
+  version: z.number().optional(),
+});
 
 export const taskSchema = z.object({
   title: z.string().trim().min(1, 'Task title is required'),
@@ -164,11 +177,15 @@ export const taskSchema = z.object({
   dueDate: z.string().or(z.date()),
   status: z.enum(['open', 'done']).default('open'),
   priority: z.enum(['low', 'medium', 'high']).default('medium'),
+  type: z.enum(['call', 'email', 'meeting', 'document', 'todo']).default('todo'),
   deal: z.string().nullable().optional(),
   owner: z.string().optional(),
 });
 
-export const taskUpdateSchema = taskSchema.partial();
+export const taskUpdateSchema = taskSchema.partial().extend({
+  updatedAt: z.string().or(z.date()).optional(),
+  version: z.number().optional(),
+});
 
 // Activity Schemas
 export const createActivitySchema = z.object({

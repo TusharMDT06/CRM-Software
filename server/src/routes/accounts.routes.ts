@@ -11,6 +11,8 @@ import { buildOwnerFilter, parseSort } from '../utils/queryHelper.js';
 import { validateCustomFields } from '../utils/customFields.js';
 import { logActivity } from '../utils/activityHelper.js';
 import { toCSV } from '../utils/csvHelper.js';
+import { paginateQuery } from '../utils/paginationHelper.js';
+import { hasVersionConflict, sendConflictResponse } from '../utils/conflictHelper.js';
 
 export const accountsRouter = Router();
 
@@ -41,31 +43,15 @@ function buildAccountQuery(user: any, queryParams: any): FilterQuery<any> {
 accountsRouter.get('/', async (req: AuthRequest, res: Response) => {
   try {
     const user = req.user!;
-    const page = Math.max(1, parseInt(req.query.page as string) || 1);
-    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 10));
-    const skip = (page - 1) * limit;
-
     const query = buildAccountQuery(user, req.query);
-    const sort = parseSort(req.query.sort as string);
 
-    const [data, total] = await Promise.all([
-      Account.find(query)
-        .populate('owner', 'name email role')
-        .sort(sort)
-        .skip(skip)
-        .limit(limit),
-      Account.countDocuments(query),
-    ]);
-
-    res.json({
-      data,
-      pagination: {
-        total,
-        page,
-        limit,
-        totalPages: Math.ceil(total / limit) || 1,
-      },
+    const result = await paginateQuery(Account, query, req.query, {
+      populate: [{ path: 'owner', select: 'name email role' }],
+      defaultSort: { createdAt: -1 },
+      defaultLimit: 10,
     });
+
+    res.json(result);
   } catch (error: any) {
     res.status(500).json({ message: error.message || 'Failed to fetch accounts' });
   }
@@ -336,6 +322,12 @@ accountsRouter.patch('/:id', validateBody(accountUpdateSchema), async (req: Auth
         return;
       }
       req.body.custom = { ...(account.custom || {}), ...cf.cleanData };
+    }
+
+    if (hasVersionConflict(account, req.body)) {
+      await account.populate('owner', 'name email role');
+      sendConflictResponse(res, account);
+      return;
     }
 
     Object.assign(account, req.body);

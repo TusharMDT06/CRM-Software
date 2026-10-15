@@ -6,8 +6,12 @@ import { CommandPalette } from './CommandPalette.js';
 import { ImpersonationBanner } from '../common/ImpersonationBanner.js';
 import { CopilotPanel } from '../ai/CopilotPanel.js';
 import { getAiStatus } from '../../api/ai.js';
+import { useRealtime } from '../../hooks/useRealtime.js';
 
 export const AppLayout: React.FC = () => {
+  // Activate Socket.IO realtime sync across the application
+  useRealtime();
+
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [copilotOpen, setCopilotOpen] = useState(false);

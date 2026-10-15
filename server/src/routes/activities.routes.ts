@@ -5,10 +5,12 @@ import { Lead } from '../models/Lead.js';
 import { Contact } from '../models/Contact.js';
 import { Account } from '../models/Account.js';
 import { Deal } from '../models/Deal.js';
+import { User } from '../models/User.js';
 import { authenticate } from '../middleware/auth.js';
 import { validateBody } from '../middleware/validate.js';
 import { createActivitySchema, updateActivitySchema } from '../validations/index.js';
 import { AuthRequest } from '../types/index.js';
+import { sendNotification } from '../utils/notificationService.js';
 
 export const activitiesRouter = Router();
 
@@ -135,6 +137,41 @@ activitiesRouter.post(
       });
 
       await activity.populate('createdBy', 'name email role');
+
+      // Check for mentions in body: @name or @email
+      if (activity.body && activity.body.includes('@')) {
+        const words = activity.body.split(/\s+/);
+        const mentionTokens = words
+          .filter((w: string) => w.startsWith('@'))
+          .map((w: string) => w.slice(1).replace(/[^a-zA-Z0-9._-]/g, ''))
+          .filter(Boolean);
+
+        if (mentionTokens.length > 0) {
+          const mentionedUsers = await User.find({
+            $or: [
+              { email: { $in: mentionTokens.map((t: string) => new RegExp(`^${t}`, 'i')) } },
+              { name: { $in: mentionTokens.map((t: string) => new RegExp(t, 'i')) } },
+            ],
+            active: true,
+          });
+
+          for (const mUser of mentionedUsers) {
+            if (!mUser._id.equals(user._id)) {
+              sendNotification({
+                userId: mUser._id,
+                actorId: user._id,
+                type: 'mention',
+                title: `${user.name} mentioned you`,
+                body: activity.body.slice(0, 120),
+                link: `/${entityType}s/${entityId}`,
+                entityType,
+                entityId: entityId.toString(),
+              }).catch(() => {});
+            }
+          }
+        }
+      }
+
       res.status(201).json(activity);
     } catch (error: any) {
       res.status(500).json({ message: error.message || 'Failed to create activity' });

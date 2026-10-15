@@ -1,6 +1,8 @@
 import mongoose, { Document, Schema, Types } from 'mongoose';
 import { tenantPlugin } from '../utils/tenantPlugin.js';
+import { realtimePlugin } from '../utils/realtimePlugin.js';
 
+export type LeadRating = 'hot' | 'warm' | 'cold';
 export type LeadSource = 'website' | 'referral' | 'social' | 'email' | 'event' | 'other';
 export type LeadStatus = 'new' | 'contacted' | 'qualified' | 'converted' | 'lost';
 
@@ -57,6 +59,7 @@ export interface ILead extends Document {
   company: string;
   source: LeadSource;
   status: LeadStatus;
+  rating: LeadRating;
   value: number;
   notes: string;
   custom?: Record<string, any>;
@@ -115,6 +118,13 @@ const LeadSchema = new Schema<ILead>(
       type: String,
       enum: ['new', 'contacted', 'qualified', 'converted', 'lost'],
       default: 'new',
+      required: true,
+      index: true,
+    },
+    rating: {
+      type: String,
+      enum: ['hot', 'warm', 'cold'],
+      default: 'warm',
       required: true,
       index: true,
     },
@@ -234,5 +244,6 @@ LeadSchema.index({ tenantId: 1, phone: 1 });
 LeadSchema.index({ tenantId: 1, channel: 1, createdAt: -1 });
 LeadSchema.index({ tenantId: 1, isTest: 1 });
 LeadSchema.plugin(tenantPlugin);
+LeadSchema.plugin(realtimePlugin('lead'));
 
 export const Lead = mongoose.model<ILead>('Lead', LeadSchema);

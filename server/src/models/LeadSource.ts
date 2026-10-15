@@ -1,5 +1,6 @@
 import mongoose, { Document, Schema, Types } from 'mongoose';
 import { tenantPlugin } from '../utils/tenantPlugin.js';
+import { realtimePlugin } from '../utils/realtimePlugin.js';
 import { generateUnguessableId } from '../utils/cryptoHelper.js';
 
 export type LeadSourcePlatformType =
@@ -102,5 +103,6 @@ const LeadSourceSchema = new Schema<ILeadSource>(
 
 LeadSourceSchema.index({ tenantId: 1, type: 1 });
 LeadSourceSchema.plugin(tenantPlugin);
+LeadSourceSchema.plugin(realtimePlugin('leadSource'));
 
 export const LeadSource = mongoose.model<ILeadSource>('LeadSource', LeadSourceSchema);

@@ -2,9 +2,16 @@
   "name": "flowdesk-crm",
   "version": "1.0.0",
   "private": true,
+  "workspaces": [
+    "shared",
+    "server",
+    "client",
+    "mobile"
+  ],
   "scripts": {
     "dev:server": "npm run dev --prefix server",
     "dev:client": "npm run dev --prefix client",
+    "build:shared": "npm run build --prefix shared",
     "seed": "npm run seed --prefix server",
     "build:server": "npm run build --prefix server",
     "build:client": "npm run build --prefix client",

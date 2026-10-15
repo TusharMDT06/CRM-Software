@@ -1,5 +1,6 @@
 import mongoose, { Document, Schema, Types } from 'mongoose';
 import { tenantPlugin } from '../utils/tenantPlugin.js';
+import { realtimePlugin } from '../utils/realtimePlugin.js';
 
 export interface IAccount extends Document {
   _id: Types.ObjectId;
@@ -67,5 +68,6 @@ const AccountSchema = new Schema<IAccount>(
 
 AccountSchema.index({ name: 'text', industry: 'text', city: 'text' });
 AccountSchema.plugin(tenantPlugin);
+AccountSchema.plugin(realtimePlugin('account'));
 
 export const Account = mongoose.model<IAccount>('Account', AccountSchema);

@@ -116,6 +116,8 @@ export async function authenticate(
     }
 
     req.tenant = tenant;
+    const clientMutationId = (req.headers['x-client-mutation-id'] as string) || undefined;
+    req.clientMutationId = clientMutationId;
 
     // Run rest of request inside active tenant context
     return runWithTenantContext(
@@ -123,6 +125,7 @@ export async function authenticate(
         tenantId: user.tenantId.toString(),
         user,
         requestId,
+        clientMutationId,
       },
       () => next()
     );

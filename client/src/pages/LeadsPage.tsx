@@ -57,6 +57,7 @@ export const LeadsPage: React.FC = () => {
     company: '',
     source: 'website' as LeadSource,
     status: 'new' as LeadStatus,
+    rating: 'warm' as 'hot' | 'warm' | 'cold',
     value: 0,
     notes: '',
     owner: '',
@@ -188,6 +189,7 @@ export const LeadsPage: React.FC = () => {
       company: '',
       source: 'website',
       status: 'new',
+      rating: 'warm',
       value: 100000,
       notes: '',
       owner: user?._id || '',
@@ -270,6 +272,26 @@ export const LeadsPage: React.FC = () => {
           {lead.status}
         </Badge>
       ),
+    },
+    {
+      key: 'rating',
+      header: 'Rating',
+      sortable: true,
+      render: (lead) => {
+        const r = lead.rating || 'warm';
+        const color =
+          r === 'hot'
+            ? 'text-rose-600 bg-rose-500/10 border-rose-500/20'
+            : r === 'warm'
+            ? 'text-amber-600 bg-amber-500/10 border-amber-500/20'
+            : 'text-blue-600 bg-blue-500/10 border-blue-500/20';
+        const emoji = r === 'hot' ? '🔥' : r === 'warm' ? '☀️' : '❄️';
+        return (
+          <span className={`text-xs capitalize font-medium px-2 py-0.5 rounded-full border inline-flex items-center gap-1 ${color}`}>
+            <span>{emoji}</span> {r}
+          </span>
+        );
+      },
     },
     {
       key: 'value',
@@ -548,7 +570,7 @@ export const LeadsPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             <div>
               <label className="block text-xs font-medium text-foreground mb-1">
                 Status
@@ -563,6 +585,21 @@ export const LeadsPage: React.FC = () => {
                 <option value="qualified">Qualified</option>
                 <option value="converted">Converted</option>
                 <option value="lost">Lost</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-foreground mb-1">
+                Rating
+              </label>
+              <select
+                value={formData.rating}
+                onChange={(e) => setFormData({ ...formData, rating: e.target.value as any })}
+                className="w-full px-3 py-2 text-sm bg-card border border-border rounded-xl text-foreground focus:outline-none focus:ring-1 focus:ring-black dark:focus:ring-white"
+              >
+                <option value="hot">🔥 Hot</option>
+                <option value="warm">☀️ Warm</option>
+                <option value="cold">❄️ Cold</option>
               </select>
             </div>
 

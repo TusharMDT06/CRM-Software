@@ -141,11 +141,15 @@ export const DealsPage: React.FC = () => {
   // Save Mutation
   const saveMutation = useMutation({
     mutationFn: async (data: typeof formData) => {
+      const payload = {
+        ...data,
+        contact: data.contact ? data.contact : undefined,
+      };
       if (selectedDeal) {
-        const res = await api.patch(`/deals/${selectedDeal._id}`, data);
+        const res = await api.patch(`/deals/${selectedDeal._id}`, payload);
         return res.data;
       } else {
-        const res = await api.post('/deals', data);
+        const res = await api.post('/deals', payload);
         return res.data;
       }
     },
@@ -414,15 +418,14 @@ export const DealsPage: React.FC = () => {
 
             <div>
               <label className="block text-xs font-medium text-foreground mb-1">
-                Contact *
+                Contact (Optional)
               </label>
               <select
-                required
                 value={formData.contact}
                 onChange={(e) => setFormData({ ...formData, contact: e.target.value })}
                 className="w-full px-3 py-2 text-sm bg-card border border-border rounded-xl text-foreground focus:outline-none focus:ring-1 focus:ring-black dark:focus:ring-white"
               >
-                <option value="" disabled>Select contact</option>
+                <option value="">No contact</option>
                 {contacts.map((c) => (
                   <option key={c._id} value={c._id}>
                     {c.firstName} {c.lastName}
@@ -634,9 +637,9 @@ const DealCard: React.FC<{
 }> = ({ deal, onClick, dragHandleProps }) => {
   const accountName = typeof deal.account === 'object' ? deal.account?.name : 'Account';
   const contactName =
-    typeof deal.contact === 'object'
-      ? `${deal.contact?.firstName} ${deal.contact?.lastName}`
-      : 'Contact';
+    deal.contact && typeof deal.contact === 'object'
+      ? `${(deal.contact as any)?.firstName || ''} ${(deal.contact as any)?.lastName || ''}`.trim() || null
+      : null;
   const ownerName = typeof deal.owner === 'object' ? deal.owner?.name : 'Owner';
   const isOpen = deal.stage !== 'won' && deal.stage !== 'lost';
   const overdue = isOpen && isOverdue(deal.expectedClose);
@@ -668,7 +671,9 @@ const DealCard: React.FC<{
         </div>
         <div className="flex items-center gap-1.5 truncate">
           <User2 className="w-3 h-3 shrink-0 opacity-60" />
-          <span className="truncate">{contactName}</span>
+          <span className={`truncate ${!contactName ? 'text-muted/50' : ''}`}>
+            {contactName || 'No contact'}
+          </span>
         </div>
       </div>
 

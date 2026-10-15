@@ -14,6 +14,9 @@ import { buildOwnerFilter, parseSort } from '../utils/queryHelper.js';
 import { validateCustomFields } from '../utils/customFields.js';
 import { logActivity } from '../utils/activityHelper.js';
 import { toCSV } from '../utils/csvHelper.js';
+import { paginateQuery } from '../utils/paginationHelper.js';
+import { hasVersionConflict, sendConflictResponse } from '../utils/conflictHelper.js';
+import { sendNotification } from '../utils/notificationService.js';
 
 export const leadsRouter = Router();
 
@@ -27,6 +30,9 @@ function buildLeadQuery(user: any, queryParams: any): FilterQuery<any> {
 
   if (queryParams.status) {
     query.status = queryParams.status;
+  }
+  if (queryParams.rating) {
+    query.rating = queryParams.rating;
   }
   if (queryParams.source) {
     query.source = queryParams.source;
@@ -58,31 +64,15 @@ function buildLeadQuery(user: any, queryParams: any): FilterQuery<any> {
 leadsRouter.get('/', async (req: AuthRequest, res: Response) => {
   try {
     const user = req.user!;
-    const page = Math.max(1, parseInt(req.query.page as string) || 1);
-    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 10));
-    const skip = (page - 1) * limit;
-
     const query = buildLeadQuery(user, req.query);
-    const sort = parseSort(req.query.sort as string);
 
-    const [data, total] = await Promise.all([
-      Lead.find(query)
-        .populate('owner', 'name email role')
-        .sort(sort)
-        .skip(skip)
-        .limit(limit),
-      Lead.countDocuments(query),
-    ]);
-
-    res.json({
-      data,
-      pagination: {
-        total,
-        page,
-        limit,
-        totalPages: Math.ceil(total / limit) || 1,
-      },
+    const result = await paginateQuery(Lead, query, req.query, {
+      populate: [{ path: 'owner', select: 'name email role' }],
+      defaultSort: { createdAt: -1 },
+      defaultLimit: 10,
     });
+
+    res.json(result);
   } catch (error: any) {
     res.status(500).json({ message: error.message || 'Failed to fetch leads' });
   }
@@ -346,6 +336,20 @@ leadsRouter.post('/', requireWithinRecordLimit, validateBody(leadSchema), async 
       createdBy: user._id,
     });
 
+    const leadOwnerId = (lead.owner as any)?._id || lead.owner;
+    if (leadOwnerId && !leadOwnerId.equals(user._id)) {
+      sendNotification({
+        userId: leadOwnerId,
+        actorId: user._id,
+        type: 'lead_assigned',
+        title: `Lead Assigned: ${lead.name}`,
+        body: `You were assigned lead "${lead.name}" (${lead.company})`,
+        link: `/leads/${lead._id}`,
+        entityType: 'lead',
+        entityId: lead._id.toString(),
+      }).catch(() => {});
+    }
+
     res.status(201).json(lead);
   } catch (error: any) {
     res.status(500).json({ message: error.message || 'Failed to create lead' });
@@ -381,9 +385,29 @@ leadsRouter.patch('/:id', validateBody(leadUpdateSchema), async (req: AuthReques
       req.body.custom = { ...(lead.custom || {}), ...cf.cleanData };
     }
 
+    if (hasVersionConflict(lead, req.body)) {
+      await lead.populate('owner', 'name email role');
+      sendConflictResponse(res, lead);
+      return;
+    }
+
+    const previousOwner = lead.owner ? lead.owner.toString() : '';
     Object.assign(lead, req.body);
     await lead.save();
     await lead.populate('owner', 'name email role');
+
+    if (req.body.owner && previousOwner && previousOwner !== req.body.owner.toString()) {
+      sendNotification({
+        userId: req.body.owner,
+        actorId: user._id,
+        type: 'lead_assigned',
+        title: `Lead Assigned: ${lead.name}`,
+        body: `You were assigned lead "${lead.name}" (${lead.company})`,
+        link: `/leads/${lead._id}`,
+        entityType: 'lead',
+        entityId: lead._id.toString(),
+      }).catch(() => {});
+    }
 
     res.json(lead);
   } catch (error: any) {

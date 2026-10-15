@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { CheckSquare, Plus, Trash2, Calendar, AlertCircle, CheckCircle2, Briefcase } from 'lucide-react';
-import { Task, Deal, User, TaskPriority, TaskStatus } from '../types/index.js';
+import { CheckSquare, Plus, Trash2, Calendar, AlertCircle, CheckCircle2, Briefcase, Phone, Mail, Users, FileText } from 'lucide-react';
+import { Task, Deal, User, TaskPriority, TaskStatus, TaskType } from '../types/index.js';
 import { api } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.js';
 import { useToast } from '../context/ToastContext.js';
@@ -38,6 +38,7 @@ export const TasksPage: React.FC = () => {
     dueDate: new Date().toISOString().split('T')[0],
     status: 'open' as TaskStatus,
     priority: 'medium' as TaskPriority,
+    type: 'todo' as TaskType,
     deal: '',
     owner: '',
   });
@@ -149,6 +150,7 @@ export const TasksPage: React.FC = () => {
       dueDate: tomorrow.toISOString().split('T')[0],
       status: 'open',
       priority: 'medium',
+      type: 'todo',
       deal: '',
       owner: user?._id || '',
     });
@@ -164,6 +166,7 @@ export const TasksPage: React.FC = () => {
       dueDate: dateFormatted,
       status: task.status,
       priority: task.priority,
+      type: task.type || 'todo',
       deal: typeof task.deal === 'object' && task.deal ? task.deal._id : ((task.deal as unknown as string) || ''),
       owner: typeof task.owner === 'object' ? task.owner._id : (task.owner || ''),
     });
@@ -218,6 +221,29 @@ export const TasksPage: React.FC = () => {
               <p className="text-xs text-muted truncate mt-0.5">{task.description}</p>
             )}
           </div>
+        );
+      },
+    },
+    {
+      key: 'type',
+      header: 'Type',
+      sortable: true,
+      render: (task) => {
+        const t = task.type || 'todo';
+        const config: Record<string, { label: string; icon: any; color: string }> = {
+          call: { label: 'Call', icon: Phone, color: 'text-emerald-600 bg-emerald-500/10 border-emerald-500/20' },
+          email: { label: 'Email', icon: Mail, color: 'text-blue-600 bg-blue-500/10 border-blue-500/20' },
+          meeting: { label: 'Meeting', icon: Users, color: 'text-purple-600 bg-purple-500/10 border-purple-500/20' },
+          document: { label: 'Document', icon: FileText, color: 'text-amber-600 bg-amber-500/10 border-amber-500/20' },
+          todo: { label: 'To-Do', icon: CheckSquare, color: 'text-slate-600 bg-slate-500/10 border-slate-500/20' },
+        };
+        const item = config[t] || config.todo;
+        const Icon = item.icon;
+        return (
+          <span className={`text-xs capitalize font-medium px-2 py-0.5 rounded-full border inline-flex items-center gap-1 ${item.color}`}>
+            <Icon className="w-3 h-3" />
+            <span>{item.label}</span>
+          </span>
         );
       },
     },
@@ -414,7 +440,7 @@ export const TasksPage: React.FC = () => {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             <div>
               <label className="block text-xs font-medium text-foreground mb-1">
                 Due Date *
@@ -440,6 +466,23 @@ export const TasksPage: React.FC = () => {
                 <option value="high">High</option>
                 <option value="medium">Medium</option>
                 <option value="low">Low</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-foreground mb-1">
+                Task Type
+              </label>
+              <select
+                value={formData.type}
+                onChange={(e) => setFormData({ ...formData, type: e.target.value as TaskType })}
+                className="w-full px-3 py-2 text-sm bg-card border border-border rounded-xl text-foreground focus:outline-none focus:ring-1 focus:ring-black dark:focus:ring-white"
+              >
+                <option value="call">📞 Call</option>
+                <option value="email">✉️ Email</option>
+                <option value="meeting">👥 Meeting</option>
+                <option value="document">📄 Document</option>
+                <option value="todo">☑️ To-Do</option>
               </select>
             </div>
           </div>

@@ -12,6 +12,8 @@ import { buildOwnerFilter, parseSort } from '../utils/queryHelper.js';
 import { validateCustomFields } from '../utils/customFields.js';
 import { logActivity } from '../utils/activityHelper.js';
 import { toCSV } from '../utils/csvHelper.js';
+import { paginateQuery } from '../utils/paginationHelper.js';
+import { hasVersionConflict, sendConflictResponse } from '../utils/conflictHelper.js';
 
 export const contactsRouter = Router();
 
@@ -43,32 +45,18 @@ function buildContactQuery(user: any, queryParams: any): FilterQuery<any> {
 contactsRouter.get('/', async (req: AuthRequest, res: Response) => {
   try {
     const user = req.user!;
-    const page = Math.max(1, parseInt(req.query.page as string) || 1);
-    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 10));
-    const skip = (page - 1) * limit;
-
     const query = buildContactQuery(user, req.query);
-    const sort = parseSort(req.query.sort as string);
 
-    const [data, total] = await Promise.all([
-      Contact.find(query)
-        .populate('account', 'name industry city phone')
-        .populate('owner', 'name email role')
-        .sort(sort)
-        .skip(skip)
-        .limit(limit),
-      Contact.countDocuments(query),
-    ]);
-
-    res.json({
-      data,
-      pagination: {
-        total,
-        page,
-        limit,
-        totalPages: Math.ceil(total / limit) || 1,
-      },
+    const result = await paginateQuery(Contact, query, req.query, {
+      populate: [
+        { path: 'account', select: 'name industry city phone' },
+        { path: 'owner', select: 'name email role' },
+      ],
+      defaultSort: { createdAt: -1 },
+      defaultLimit: 10,
     });
+
+    res.json(result);
   } catch (error: any) {
     res.status(500).json({ message: error.message || 'Failed to fetch contacts' });
   }
@@ -360,6 +348,13 @@ contactsRouter.patch('/:id', validateBody(contactUpdateSchema), async (req: Auth
         return;
       }
       req.body.custom = { ...(contact.custom || {}), ...cf.cleanData };
+    }
+
+    if (hasVersionConflict(contact, req.body)) {
+      await contact.populate('account', 'name industry city phone');
+      await contact.populate('owner', 'name email role');
+      sendConflictResponse(res, contact);
+      return;
     }
 
     Object.assign(contact, req.body);

@@ -1,5 +1,6 @@
 import mongoose, { Document, Schema, Types } from 'mongoose';
 import { tenantPlugin } from '../utils/tenantPlugin.js';
+import { realtimePlugin } from '../utils/realtimePlugin.js';
 
 export type UserRole = 'platform_admin' | 'admin' | 'manager' | 'sales';
 
@@ -82,5 +83,6 @@ const UserSchema = new Schema<IUser>(
 
 // Apply central tenant isolation plugin
 UserSchema.plugin(tenantPlugin);
+UserSchema.plugin(realtimePlugin('user'));
 
 export const User = mongoose.model<IUser>('User', UserSchema);

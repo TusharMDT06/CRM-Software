@@ -7,6 +7,7 @@ export interface TenantContextStore {
   isReadOnly?: boolean;
   user?: any;
   requestId?: string;
+  clientMutationId?: string;
 }
 
 const asyncLocalStorage = new AsyncLocalStorage<TenantContextStore>();
@@ -49,4 +50,11 @@ export function isTenantBypassed(): boolean {
  */
 export function isReadOnlyContext(): boolean {
   return Boolean(asyncLocalStorage.getStore()?.isReadOnly);
+}
+
+/**
+ * Returns active clientMutationId string if present
+ */
+export function getClientMutationId(): string | undefined {
+  return asyncLocalStorage.getStore()?.clientMutationId;
 }
