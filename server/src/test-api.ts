@@ -7,8 +7,14 @@ dotenv.config();
 const PORT = 5000;
 
 async function runTests() {
-  console.log('[Test API] Running seed first...');
-  await runSeed();
+  await mongoose.connect(process.env.MONGODB_URI || '');
+  const existingUsersCount = await mongoose.connection.collection('users').countDocuments().catch(() => 0);
+  if (process.env.FORCE_SEED === 'true' || existingUsersCount === 0) {
+    console.log('[Test API] Running seed first...');
+    await runSeed();
+  } else {
+    console.log('[Test API] Existing data found, skipping destructive re-seed.');
+  }
 
   const baseUrl = `http://localhost:${PORT}/api`;
   console.log(`[Test API] Testing against running server on ${baseUrl}`);
