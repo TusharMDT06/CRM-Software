@@ -18,6 +18,7 @@
     "test:server": "npm run test:api --prefix server"
   },
   "optionalDependencies": {
+    "@esbuild/linux-x64": "0.25.12",
     "@rollup/rollup-linux-x64-gnu": "4.64.3",
     "@rollup/rollup-linux-x64-musl": "4.64.3"
   }
