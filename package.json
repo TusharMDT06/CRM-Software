@@ -16,5 +16,9 @@
     "build:server": "npm run build --prefix server",
     "build:client": "npm run build --prefix client",
     "test:server": "npm run test:api --prefix server"
+  },
+  "optionalDependencies": {
+    "@rollup/rollup-linux-x64-gnu": "4.64.3",
+    "@rollup/rollup-linux-x64-musl": "4.64.3"
   }
 }
