@@ -35,8 +35,8 @@ dashboardRouter.get('/summary', async (req: AuthRequest, res: Response) => {
         ownerFilter = { owner: user._id };
       }
     } else {
-      if (user.role === 'admin') {
-        ownerFilter = { owner: { $ne: user._id } };
+      if (user.role === 'admin' || user.role === 'manager') {
+        ownerFilter = {};
       } else {
         ownerFilter = buildOwnerFilter(user);
       }
@@ -234,7 +234,7 @@ dashboardRouter.get('/summary', async (req: AuthRequest, res: Response) => {
       });
     }
 
-    const recentDeals = allDeals.slice(0, 6);
+    const recentDeals = openDeals.slice(0, 6);
     const openTasks = openTasksList.slice(0, 6);
     const upNextTask = openTasksList.length > 0 ? openTasksList[0] : null;
 

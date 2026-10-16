@@ -120,9 +120,21 @@ export default function DashboardScreen() {
   const router = useRouter();
   const user = useSessionStore((state) => state.user);
   const canSeeTeam = user?.role === 'admin' || user?.role === 'manager';
-  const [scope, setScope] = useState<'me' | 'team'>('me');
+  const [scope, setScope] = useState<'me' | 'team'>(() =>
+    user?.role === 'admin' || user?.role === 'manager' ? 'team' : 'me'
+  );
   const [selectedOwner, setSelectedOwner] = useState<string>('');
   const [notifModalVisible, setNotifModalVisible] = useState(false);
+
+  // Sync default scope when user switches role (manager/admin defaults to team, sales to me)
+  React.useEffect(() => {
+    if (user?.role === 'admin' || user?.role === 'manager') {
+      setScope('team');
+    } else {
+      setScope('me');
+    }
+    setSelectedOwner('');
+  }, [user?.role]);
 
   const { data: usersList } = useQuery({
     queryKey: queryKeys.users.list(),
@@ -159,8 +171,8 @@ export default function DashboardScreen() {
 
   const chips = canSeeTeam
     ? [
-        { key: 'me', label: 'My Dashboard' },
         { key: 'team', label: 'Team' },
+        { key: 'me', label: 'My Dashboard' },
       ]
     : [{ key: 'me', label: 'My Dashboard' }];
 
@@ -178,10 +190,10 @@ export default function DashboardScreen() {
 
   const upNextTask = data?.upNextTask;
 
-  const totalOutstandingPaise = data?.receivables?.totalOutstandingPaise ?? 27594500;
-  const totalOverduePaise = data?.receivables?.totalOverduePaise ?? 14160000;
-  const overdueCount = data?.receivables?.overdueCount ?? 1;
-  const overduePct = data?.receivables?.overduePct ?? (totalOutstandingPaise > 0 ? Math.min(100, Math.round((totalOverduePaise / totalOutstandingPaise) * 100)) : 51);
+  const totalOutstandingPaise = data?.receivables?.totalOutstandingPaise ?? 0;
+  const totalOverduePaise = data?.receivables?.totalOverduePaise ?? 0;
+  const overdueCount = data?.receivables?.overdueCount ?? 0;
+  const overduePct = data?.receivables?.overduePct ?? (totalOutstandingPaise > 0 ? Math.min(100, Math.round((totalOverduePaise / totalOutstandingPaise) * 100)) : 0);
 
   return (
     <View style={styles.container}>
@@ -347,7 +359,7 @@ export default function DashboardScreen() {
                   title="Pipeline Value"
                   value={data?.pipelineValue ?? 0}
                   isCurrency
-                  badgeText={`${data?.openDealCount ?? 12} active deals`}
+                  badgeText={`${data?.openDealCount ?? 0} active deals`}
                   badgeBgColor="#E6EEFF"
                   badgeTextColor="#3B5BDB"
                   accentColor={theme.colors.purple}
@@ -357,8 +369,8 @@ export default function DashboardScreen() {
               <Stagger index={2} style={styles.kpiCol}>
                 <KpiCard
                   title="Deals Won"
-                  value={data?.dealsWon ?? 5}
-                  badgeText={`${data?.winRate ?? 56}% win rate`}
+                  value={data?.dealsWon ?? 0}
+                  badgeText={`${data?.winRate ?? 0}% win rate`}
                   badgeBgColor="#DDF6E8"
                   badgeTextColor="#15803D"
                   accentColor={theme.colors.orange}
@@ -368,7 +380,7 @@ export default function DashboardScreen() {
               <Stagger index={3} style={styles.kpiCol}>
                 <KpiCard
                   title="New Leads"
-                  value={data?.newLeads ?? 10}
+                  value={data?.newLeads ?? 0}
                   badgeText="waiting for first call"
                   badgeBgColor="#FDEBDD"
                   badgeTextColor="#B45309"
@@ -384,7 +396,7 @@ export default function DashboardScreen() {
                 <View>
                   <Text style={styles.cardTitle}>Sales Pipeline</Text>
                   <Text style={styles.cardSubtitle}>
-                    {data?.openDealCount ?? 12} active deals · {theme.helpers.formatINR(data?.pipelineValue ?? totalPipelineAmount)}
+                    {data?.openDealCount ?? 0} active deals · {theme.helpers.formatINR(data?.pipelineValue ?? totalPipelineAmount)}
                   </Text>
                 </View>
                 <PressableScale
@@ -408,7 +420,7 @@ export default function DashboardScreen() {
                       data={donutData}
                       size={170}
                       strokeWidth={22}
-                      centerLabel={String(data?.openDealCount ?? 12)}
+                      centerLabel={String(data?.openDealCount ?? 0)}
                       centerSubLabel="Deals"
                     />
                   </View>
@@ -475,7 +487,7 @@ export default function DashboardScreen() {
 
                   <View style={styles.healthFooter}>
                     <Text style={styles.healthFooterText} numberOfLines={1}>
-                      {data?.openDealCount ?? 12} active deals
+                      {data?.openDealCount ?? 0} active deals
                     </Text>
                     <Text style={styles.healthFooterText} numberOfLines={1}>
                       {data?.dealsAtRisk?.count ?? 0} flagged
@@ -538,11 +550,11 @@ export default function DashboardScreen() {
                   </View>
 
                   <Text style={styles.healthMetric}>
-                    {data?.taskStats?.doneRate ?? 17}%
+                    {data?.taskStats?.doneRate ?? 0}%
                   </Text>
 
                   <SegmentedMeter
-                    percentage={data?.taskStats?.doneRate ?? 17}
+                    percentage={data?.taskStats?.doneRate ?? 0}
                     color="blue"
                     totalSegments={18}
                     height={16}
@@ -551,7 +563,7 @@ export default function DashboardScreen() {
 
                   <View style={styles.healthFooter}>
                     <Text style={styles.healthFooterText} numberOfLines={1}>
-                      {data?.taskStats?.open ?? 5} open
+                      {data?.taskStats?.open ?? 0} open
                     </Text>
                     <Text
                       style={[
@@ -560,7 +572,7 @@ export default function DashboardScreen() {
                       ]}
                       numberOfLines={1}
                     >
-                      {data?.taskStats?.overdue ?? 4} overdue
+                      {data?.taskStats?.overdue ?? 0} overdue
                     </Text>
                   </View>
                 </Card>
@@ -645,7 +657,7 @@ export default function DashboardScreen() {
                     const accountName =
                       typeof deal.account === 'object' && deal.account?.name
                         ? deal.account.name
-                        : 'Tata Digital Solutions';
+                        : (typeof deal.account === 'string' && deal.account ? deal.account : 'General Account');
                     const badge = STAGE_BADGE_CONFIG[deal.stage] || {
                       label: (deal.stage || 'ACTIVE').toUpperCase(),
                       bg: '#E2E8F0',
