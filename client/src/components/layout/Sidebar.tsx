@@ -39,6 +39,20 @@ export const Sidebar: React.FC<SidebarProps> = ({ onCloseMobile }) => {
 
   const sections = [
     {
+      title: 'Admin',
+      items: [
+        ...(isPlatformAdmin ? [{ to: '/platform', label: 'Platform Admin', icon: Shield }] : []),
+        { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+        { to: '/reports', label: 'Reports', icon: BarChart3 },
+        ...(isAdmin ? [{ to: '/audit-log', label: 'Audit Log', icon: ShieldAlert }] : []),
+        ...(isAdmin ? [{ to: '/team', label: 'Team', icon: ShieldCheck }] : []),
+        ...(isAdmin ? [{ to: '/settings/company', label: 'Company Settings', icon: Building }] : []),
+        ...(isAdmin ? [{ to: '/settings/ai', label: 'AI Intelligence', icon: Sparkles }] : []),
+        { to: '/settings/notifications', label: 'Notifications', icon: Bell },
+        ...(isAdmin ? [{ to: '/settings/custom-fields', label: 'Custom Fields', icon: Settings }] : []),
+      ],
+    },
+    {
       title: 'Sales',
       items: [
         { to: '/leads', label: 'Leads', icon: Users2 },
@@ -81,20 +95,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ onCloseMobile }) => {
           },
         ]
       : []),
-    {
-      title: 'Admin',
-      items: [
-        ...(isPlatformAdmin ? [{ to: '/platform', label: 'Platform Admin', icon: Shield }] : []),
-        { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-        { to: '/reports', label: 'Reports', icon: BarChart3 },
-        ...(isAdmin ? [{ to: '/audit-log', label: 'Audit Log', icon: ShieldAlert }] : []),
-        ...(isAdmin ? [{ to: '/team', label: 'Team', icon: ShieldCheck }] : []),
-        ...(isAdmin ? [{ to: '/settings/company', label: 'Company Settings', icon: Building }] : []),
-        ...(isAdmin ? [{ to: '/settings/ai', label: 'AI Intelligence', icon: Sparkles }] : []),
-        { to: '/settings/notifications', label: 'Notifications', icon: Bell },
-        ...(isAdmin ? [{ to: '/settings/custom-fields', label: 'Custom Fields', icon: Settings }] : []),
-      ],
-    },
   ];
 
   const getInitials = (name?: string) => {
