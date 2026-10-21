@@ -8,6 +8,8 @@ import { CopilotPanel } from '../ai/CopilotPanel.js';
 import { getAiStatus } from '../../api/ai.js';
 import { useRealtime } from '../../hooks/useRealtime.js';
 
+const SIDEBAR_COLLAPSED_KEY = 'flowdesk_sidebar_collapsed';
+
 export const AppLayout: React.FC = () => {
   // Activate Socket.IO realtime sync across the application
   useRealtime();
@@ -16,6 +18,13 @@ export const AppLayout: React.FC = () => {
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [copilotOpen, setCopilotOpen] = useState(false);
   const [aiEnabled, setAiEnabled] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true';
+    } catch {
+      return false;
+    }
+  });
   const location = useLocation();
 
   useEffect(() => {
@@ -27,6 +36,16 @@ export const AppLayout: React.FC = () => {
       })
       .catch(() => {});
   }, []);
+
+  const handleToggleSidebar = () => {
+    setSidebarCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(next));
+      } catch {}
+      return next;
+    });
+  };
 
   // Determine page title based on path
   const getPageInfo = () => {
@@ -48,6 +67,11 @@ export const AppLayout: React.FC = () => {
         e.preventDefault();
         setCommandPaletteOpen((prev) => !prev);
       }
+      // Ctrl+B or Cmd+B to toggle sidebar (like VS Code / Notion)
+      if ((e.metaKey || e.ctrlKey) && e.key === 'b') {
+        e.preventDefault();
+        handleToggleSidebar();
+      }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
@@ -62,7 +86,10 @@ export const AppLayout: React.FC = () => {
         <div className="flex-1 flex overflow-hidden min-h-0">
           {/* Desktop Sidebar */}
           <div className="hidden md:flex h-full">
-            <Sidebar />
+            <Sidebar
+              collapsed={sidebarCollapsed}
+              onToggleCollapse={handleToggleSidebar}
+            />
           </div>
 
         {/* Mobile Sidebar Drawer */}
