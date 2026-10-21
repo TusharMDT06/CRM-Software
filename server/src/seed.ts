@@ -22,6 +22,8 @@ import { WorkflowRun } from './models/WorkflowRun.js';
 import { Notification } from './models/Notification.js';
 import { NotificationPreference } from './models/NotificationPreference.js';
 import { DocumentModel } from './models/Document.js';
+import { Meeting } from './models/Meeting.js';
+import { Call } from './models/Call.js';
 import { Tenant, DEFAULT_PLAN_LIMITS } from './models/Tenant.js';
 import { calculateDocumentTotals } from './utils/moneyHelper.js';
 import { runWithTenantContext } from './utils/tenantContext.js';
@@ -55,6 +57,8 @@ export async function runSeed() {
       Notification.deleteMany({}),
       NotificationPreference.deleteMany({}),
       DocumentModel.deleteMany({}),
+      Meeting.deleteMany({}),
+      Call.deleteMany({}),
     ]);
     console.log('[Seed] Cleared existing data.');
 
@@ -1970,6 +1974,270 @@ Best regards,
 
   await DocumentModel.insertMany(sampleDocuments);
   console.log(`[Seed] Created ${sampleDocuments.length} sample sales documents.`);
+
+  // 20. Seed Zoho-style Meetings (Activities -> Meetings)
+  const sampleMeetings = [
+    {
+      title: 'Demo',
+      from: new Date(2026, 9, 11, 19, 6, 0),
+      to: new Date(2026, 9, 11, 20, 6, 0),
+      allDay: false,
+      status: 'scheduled',
+      locationType: 'google_meet',
+      meetingUrl: 'https://meet.google.com/dmo-flow-desk',
+      relatedTo: {
+        entityType: 'account',
+        entityId: accounts[0]?._id,
+        entityName: 'Printing Dimensions',
+      },
+      contactName: 'Donette Foller (Sample)',
+      contactEmail: 'donette.foller@sample.com',
+      host: salesUser._id,
+      participants: ['donette.foller@sample.com', salesUser.email],
+      agenda: 'Product walkthrough and architecture capability demonstration.',
+      outcome: '',
+      reminderMinutes: 15,
+    },
+    {
+      title: 'Webinar',
+      from: new Date(2026, 9, 11, 21, 6, 0),
+      to: new Date(2026, 9, 11, 22, 6, 0),
+      allDay: false,
+      status: 'scheduled',
+      locationType: 'zoom',
+      meetingUrl: 'https://zoom.us/j/9812739182',
+      relatedTo: {
+        entityType: 'account',
+        entityId: accounts[1]?._id,
+        entityName: 'Commercial Press (Sample)',
+      },
+      contactName: 'Leota Dilliard (Sample)',
+      contactEmail: 'leota.dilliard@sample.com',
+      host: salesUser._id,
+      participants: ['leota.dilliard@sample.com'],
+      agenda: 'Lead nurturing and automated marketing pipeline discussion.',
+      outcome: '',
+      reminderMinutes: 15,
+    },
+    {
+      title: 'TradeShow',
+      from: new Date(2026, 9, 11, 9, 0, 0),
+      to: new Date(2026, 9, 12, 18, 0, 0),
+      allDay: true,
+      status: 'scheduled',
+      locationType: 'in_person',
+      locationDetails: 'Pragati Maidan, Convention Hall 4, New Delhi',
+      relatedTo: {
+        entityType: 'account',
+        entityId: accounts[2]?._id,
+        entityName: 'Chemel',
+      },
+      contactName: 'James Venere (Sample)',
+      host: managerUser._id,
+      participants: ['james.venere@sample.com'],
+      agenda: 'Annual SaaS and Cloud Infrastructure Expo booth presentation.',
+      reminderMinutes: 60,
+    },
+    {
+      title: 'Webinar',
+      from: new Date(2026, 9, 11, 20, 6, 0),
+      to: new Date(2026, 9, 11, 23, 6, 0),
+      allDay: false,
+      status: 'scheduled',
+      locationType: 'teams',
+      meetingUrl: 'https://teams.microsoft.com/l/meetup-join/sample',
+      relatedTo: {
+        entityType: 'account',
+        entityId: accounts[3]?._id,
+        entityName: 'Chanay (Sample)',
+      },
+      contactName: 'Josephine Darakjy (Sample)',
+      host: salesUser2._id,
+      participants: ['josephine@sample.com'],
+      agenda: 'Deep dive into workflow automation and trigger conditions.',
+      reminderMinutes: 15,
+    },
+    {
+      title: 'Seminar',
+      from: new Date(2026, 9, 11, 19, 6, 0),
+      to: new Date(2026, 9, 11, 21, 6, 0),
+      allDay: false,
+      status: 'scheduled',
+      locationType: 'google_meet',
+      meetingUrl: 'https://meet.google.com/sem-nar-flow',
+      relatedTo: {
+        entityType: 'contact',
+        entityId: contacts[0]?._id,
+        entityName: 'Carissa Kidman (Sample)',
+      },
+      contactName: 'Carissa Kidman (Sample)',
+      host: salesUser._id,
+      agenda: 'AI-driven forecasting and probability weighting masterclass.',
+      reminderMinutes: 30,
+    },
+    {
+      title: 'Attend Customer conference',
+      from: new Date(2026, 9, 11, 10, 0, 0),
+      to: new Date(2026, 9, 11, 17, 0, 0),
+      allDay: true,
+      status: 'completed',
+      locationType: 'in_person',
+      locationDetails: 'Grand Hyatt Mumbai',
+      relatedTo: {
+        entityType: 'account',
+        entityId: accounts[4]?._id,
+        entityName: 'Feltz Printing Service',
+      },
+      contactName: 'Capla Paprocki (Sample)',
+      host: adminUser._id,
+      agenda: 'Annual customer advisory board meeting.',
+      outcome: 'Client approved expansion to 50 additional user seats in Q1.',
+      reminderMinutes: 60,
+    },
+    {
+      title: 'CRM Webinar',
+      from: new Date(2026, 9, 11, 18, 6, 0),
+      to: new Date(2026, 9, 11, 20, 6, 0),
+      allDay: false,
+      status: 'scheduled',
+      locationType: 'google_meet',
+      meetingUrl: 'https://meet.google.com/crm-web-inar',
+      relatedTo: {
+        entityType: 'account',
+        entityId: accounts[5]?._id,
+        entityName: 'Morlong Associates',
+      },
+      contactName: 'Mitsue Tollner (Sample)',
+      host: salesUser._id,
+      agenda: 'Product onboarding for new sales development representatives.',
+      reminderMinutes: 15,
+    },
+    {
+      title: 'CRM Webinar',
+      from: new Date(2026, 9, 11, 17, 6, 0),
+      to: new Date(2026, 9, 11, 18, 6, 0),
+      allDay: false,
+      status: 'completed',
+      locationType: 'zoom',
+      contactName: 'Felix Hirpara (Sample)',
+      host: salesUser2._id,
+      agenda: 'Customer success touchpoint and quarterly business review.',
+      outcome: 'Shared feature wishlist with product team.',
+      reminderMinutes: 15,
+    },
+    {
+      title: 'CRM Webinar',
+      from: new Date(2026, 9, 11, 17, 6, 0),
+      to: new Date(2026, 9, 11, 18, 6, 0),
+      allDay: false,
+      status: 'scheduled',
+      locationType: 'google_meet',
+      relatedTo: {
+        entityType: 'account',
+        entityId: accounts[6]?._id,
+        entityName: 'Benton',
+      },
+      contactName: 'John Butt (Sample)',
+      host: managerUser._id,
+      agenda: 'High-level commercial terms alignment.',
+      reminderMinutes: 15,
+    },
+  ];
+
+  await Meeting.insertMany(sampleMeetings);
+  console.log(`[Seed] Created ${sampleMeetings.length} sample meetings (Activities -> Meetings).`);
+
+  // 21. Seed Zoho-style Calls (Activities -> Calls)
+  const sampleCalls = [
+    {
+      subject: 'Discovery Call - Hyperlocal POS Sync',
+      callType: 'outbound',
+      callPurpose: 'discovery',
+      startTime: pastDays(1),
+      durationSeconds: 860, // 14m 20s
+      callResult: 'connected',
+      relatedTo: {
+        entityType: 'deal',
+        entityId: deals[6]?._id,
+        entityName: 'Reliance Retail - Hyperlocal POS Solution',
+      },
+      contactName: 'Rajesh Ambani',
+      phoneNumber: '+91 98200 11223',
+      owner: managerUser._id,
+      notes: 'Discussed integration timelines with their SAP ERP and agreed on SLA tier 1 terms.',
+      followUpAction: 'Send updated MSA draft for legal approval.',
+    },
+    {
+      subject: 'Contract Negotiation Follow-up',
+      callType: 'outbound',
+      callPurpose: 'negotiation',
+      startTime: pastDays(2),
+      durationSeconds: 420, // 7m 00s
+      callResult: 'callback_requested',
+      relatedTo: {
+        entityType: 'deal',
+        entityId: deals[8]?._id,
+        entityName: 'Razorpay - Instant Dispute Webhook System',
+      },
+      contactName: 'Siddharth Verma',
+      phoneNumber: '+91 98111 22334',
+      owner: salesUser._id,
+      notes: 'Client requested callback after their Monday risk committee review.',
+      followUpAction: 'Call on Tuesday 11:00 AM.',
+    },
+    {
+      subject: 'Product Inquiry - License Upgrade',
+      callType: 'inbound',
+      callPurpose: 'support',
+      startTime: pastDays(3),
+      durationSeconds: 525, // 8m 45s
+      callResult: 'connected',
+      relatedTo: {
+        entityType: 'account',
+        entityId: accounts[0]?._id,
+        entityName: 'Tata Digital Solutions',
+      },
+      contactName: 'Ritesh Arora',
+      phoneNumber: '+91 99000 33445',
+      owner: salesUser._id,
+      notes: 'Assisted with custom fields limit and initiated upgrade quote.',
+      followUpAction: 'Generate and send Quote Q-2026-0005.',
+    },
+    {
+      subject: 'Executive Demo Confirmation',
+      callType: 'scheduled',
+      callPurpose: 'demo',
+      startTime: futureDays(2),
+      durationSeconds: 1800, // 30m scheduled
+      callResult: 'connected',
+      relatedTo: {
+        entityType: 'deal',
+        entityId: deals[7]?._id,
+        entityName: 'Zomato - Restaurant POS & Inventory Sync',
+      },
+      contactName: 'Deepinder Goyal',
+      phoneNumber: '+91 97111 55667',
+      owner: salesUser._id,
+      notes: 'Prepare slide deck for C-level presentation.',
+      followUpAction: 'Confirm Google Meet link on calendar.',
+    },
+    {
+      subject: 'Cold Prospecting Call',
+      callType: 'outbound',
+      callPurpose: 'prospecting',
+      startTime: pastDays(4),
+      durationSeconds: 95, // 1m 35s
+      callResult: 'left_voicemail',
+      contactName: 'Priya Patel',
+      phoneNumber: '+91 98222 66778',
+      owner: salesUser2._id,
+      notes: 'Left message detailing Flowdesk AI forecasting benefits.',
+      followUpAction: 'Follow up via email template #2.',
+    },
+  ];
+
+  await Call.insertMany(sampleCalls);
+  console.log(`[Seed] Created ${sampleCalls.length} sample calls (Activities -> Calls).`);
   });
 
   console.log('[Seed] Seeding completed successfully!');

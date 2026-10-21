@@ -46,7 +46,9 @@ export type AuditEntityType =
   | 'tenant'
   | 'audit_log'
   | 'document'
-  | 'forecast';
+  | 'forecast'
+  | 'meeting'
+  | 'call';
 
 export interface FieldChange {
   field: string;

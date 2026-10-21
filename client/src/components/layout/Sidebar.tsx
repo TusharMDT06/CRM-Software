@@ -31,6 +31,8 @@ import {
   PanelLeftOpen,
   TrendingUp,
   FolderArchive,
+  CalendarDays,
+  PhoneCall,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.js';
 
@@ -69,6 +71,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ onCloseMobile, collapsed = fal
         { to: '/documents', label: 'Documents', icon: FolderArchive },
         { to: '/tasks', label: 'Tasks', icon: CheckSquare },
         { to: '/products', label: 'Products', icon: Package },
+      ],
+    },
+    {
+      title: 'Activities',
+      items: [
+        { to: '/meetings', label: 'Meetings', icon: CalendarDays },
+        { to: '/calls', label: 'Calls', icon: PhoneCall },
       ],
     },
     {

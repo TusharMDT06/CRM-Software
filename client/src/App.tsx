@@ -27,6 +27,8 @@ import { ReportsPage } from './pages/ReportsPage.js';
 import { CustomFieldsSettingsPage } from './pages/CustomFieldsSettingsPage.js';
 import { ForecastsPage } from './pages/ForecastsPage.js';
 import { DocumentsPage } from './pages/DocumentsPage.js';
+import { MeetingsPage } from './pages/MeetingsPage.js';
+import { CallsPage } from './pages/CallsPage.js';
 
 // Phase 3 Pages
 import { ProductsPage } from './pages/ProductsPage.js';
@@ -125,6 +127,10 @@ export const App: React.FC = () => {
                     <Route path="documents" element={<DocumentsPage />} />
                     <Route path="tasks" element={<TasksPage />} />
                     <Route path="products" element={<ProductsPage />} />
+
+                    {/* Activities Section */}
+                    <Route path="meetings" element={<MeetingsPage />} />
+                    <Route path="calls" element={<CallsPage />} />
 
                     {/* Billing Section */}
                     <Route path="quotes" element={<QuotesListPage />} />

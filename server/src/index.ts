@@ -40,6 +40,8 @@ import { messagesRouter, inboundSmsRouter } from './routes/messages.routes.js';
 import { leadSourcesRouter } from './routes/leadSources.routes.js';
 import { documentsRouter } from './routes/documents.routes.js';
 import { forecastsRouter } from './routes/forecasts.routes.js';
+import { meetingsRouter } from './routes/meetings.routes.js';
+import { callsRouter } from './routes/calls.routes.js';
 import { initSocketIO } from './realtime/socket.js';
 import { idempotencyMiddleware } from './middleware/idempotency.js';
 import { registerWorkflowListeners } from './utils/workflowEngine.js';
@@ -177,6 +179,8 @@ const registerBusinessRoutes = (prefix: string) => {
   app.use(`${prefix}/lead-sources`, leadSourcesRouter);
   app.use(`${prefix}/documents`, documentsRouter);
   app.use(`${prefix}/forecasts`, forecastsRouter);
+  app.use(`${prefix}/meetings`, meetingsRouter);
+  app.use(`${prefix}/calls`, callsRouter);
   app.use(`${prefix}/hooks`, webhooksRouter);
 };
 

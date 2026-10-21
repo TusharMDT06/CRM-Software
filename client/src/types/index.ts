@@ -931,4 +931,95 @@ export interface ForecastDashboardData {
   }>;
 }
 
+// ================= ZOHO ACTIVITIES: MEETINGS & CALLS =================
+
+export type MeetingStatus = 'scheduled' | 'in_progress' | 'completed' | 'cancelled';
+export type MeetingLocationType = 'google_meet' | 'zoom' | 'teams' | 'in_person' | 'phone' | 'other';
+
+export interface MeetingItem {
+  _id: string;
+  title: string;
+  from: string;
+  to: string;
+  allDay: boolean;
+  status: MeetingStatus;
+  locationType: MeetingLocationType;
+  locationDetails?: string;
+  meetingUrl?: string;
+  relatedTo: {
+    entityType: 'deal' | 'account' | 'lead' | 'contact' | 'none';
+    entityId?: string;
+    entityName?: string;
+  };
+  contactName?: string;
+  contactEmail?: string;
+  host: {
+    _id: string;
+    name: string;
+    email: string;
+    role?: string;
+  };
+  participants: string[];
+  agenda?: string;
+  outcome?: string; // MOM
+  reminderMinutes: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MeetingStats {
+  totalMeetings: number;
+  upcomingCount: number;
+  todayCount: number;
+  completedCount: number;
+}
+
+export type CallType = 'outbound' | 'inbound' | 'scheduled';
+export type CallPurpose = 'discovery' | 'prospecting' | 'demo' | 'negotiation' | 'follow_up' | 'support' | 'administrative';
+export type CallResult =
+  | 'connected'
+  | 'left_voicemail'
+  | 'no_answer'
+  | 'busy'
+  | 'wrong_number'
+  | 'callback_requested'
+  | 'interested'
+  | 'not_interested';
+
+export interface CallItem {
+  _id: string;
+  subject: string;
+  callType: CallType;
+  callPurpose: CallPurpose;
+  startTime: string;
+  durationSeconds: number;
+  callResult: CallResult;
+  relatedTo: {
+    entityType: 'deal' | 'account' | 'lead' | 'contact' | 'none';
+    entityId?: string;
+    entityName?: string;
+  };
+  contactName?: string;
+  phoneNumber?: string;
+  owner: {
+    _id: string;
+    name: string;
+    email: string;
+    role?: string;
+  };
+  notes?: string;
+  followUpAction?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CallStats {
+  totalCalls: number;
+  outboundCount: number;
+  inboundCount: number;
+  scheduledCount: number;
+  totalDurationSeconds: number;
+}
+
+
 
