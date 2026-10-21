@@ -21,6 +21,7 @@ import { Workflow } from './models/Workflow.js';
 import { WorkflowRun } from './models/WorkflowRun.js';
 import { Notification } from './models/Notification.js';
 import { NotificationPreference } from './models/NotificationPreference.js';
+import { DocumentModel } from './models/Document.js';
 import { Tenant, DEFAULT_PLAN_LIMITS } from './models/Tenant.js';
 import { calculateDocumentTotals } from './utils/moneyHelper.js';
 import { runWithTenantContext } from './utils/tenantContext.js';
@@ -53,6 +54,7 @@ export async function runSeed() {
       WorkflowRun.deleteMany({}),
       Notification.deleteMany({}),
       NotificationPreference.deleteMany({}),
+      DocumentModel.deleteMany({}),
     ]);
     console.log('[Seed] Cleared existing data.');
 
@@ -1836,6 +1838,138 @@ Best regards,
     });
   }
   console.log('[Seed] Created Notification Preferences for users.');
+
+  // 19. Seed Zoho-style Sales Documents (File Cabinet)
+  const sampleDocuments = [
+    {
+      name: 'Reliance Retail - Hyperlocal POS SaaS Agreement.pdf',
+      folder: 'Contracts & NDAs',
+      fileType: 'pdf',
+      fileSize: 2450000,
+      version: '1.2',
+      status: 'signed',
+      tags: ['Enterprise', 'Reliance', 'SaaS Agreement', 'Confidential'],
+      description: 'Fully executed Master Subscription Agreement with SLA terms, liability caps, and tier-1 uptime commitments.',
+      relatedTo: {
+        entityType: 'deal',
+        entityId: deals[6]._id,
+        entityName: 'Reliance Retail - Hyperlocal POS Solution',
+      },
+      uploadedBy: managerUser._id,
+      downloadCount: 14,
+      isStarred: true,
+      isShared: true,
+    },
+    {
+      name: 'Flowdesk CRM Enterprise Pitch Deck 2026.pptx',
+      folder: 'Pitch Decks & Presentations',
+      fileType: 'pptx',
+      fileSize: 18400000,
+      version: '2.0',
+      status: 'approved',
+      tags: ['Pitch Deck', 'Sales Collateral', 'Executive Demo'],
+      description: 'Official corporate pitch deck showcasing AI copilot, pipeline intelligence, and omnichannel automation.',
+      relatedTo: {
+        entityType: 'none',
+      },
+      uploadedBy: adminUser._id,
+      downloadCount: 38,
+      isStarred: true,
+      isShared: true,
+    },
+    {
+      name: 'Razorpay - Instant Dispute Webhook Proposal.pdf',
+      folder: 'Proposals & Quotes',
+      fileType: 'pdf',
+      fileSize: 1280000,
+      version: '1.0',
+      status: 'under_review',
+      tags: ['Proposal', 'Fintech', 'Razorpay'],
+      description: 'Technical proposal & commercial terms for automated dispute resolution and chargeback sync.',
+      relatedTo: {
+        entityType: 'deal',
+        entityId: deals[8]._id,
+        entityName: 'Razorpay - Instant Dispute Webhook System',
+      },
+      uploadedBy: salesUser._id,
+      downloadCount: 7,
+      isStarred: false,
+      isShared: true,
+    },
+    {
+      name: 'Cloud Infrastructure & Security Architecture Whitepaper.pdf',
+      folder: 'Product Collateral',
+      fileType: 'pdf',
+      fileSize: 4500000,
+      version: '3.1',
+      status: 'approved',
+      tags: ['Security', 'SOC2', 'Architecture', 'Whitepaper'],
+      description: 'Comprehensive overview of ISO 27001, SOC 2 Type II compliance, zero-trust RBAC, and multi-tenant isolation.',
+      relatedTo: {
+        entityType: 'none',
+      },
+      uploadedBy: adminUser._id,
+      downloadCount: 22,
+      isStarred: false,
+      isShared: true,
+    },
+    {
+      name: 'Standard Mutual Non-Disclosure Agreement (NDA).docx',
+      folder: 'Contracts & NDAs',
+      fileType: 'docx',
+      fileSize: 340000,
+      version: '1.0',
+      status: 'approved',
+      tags: ['NDA', 'Legal Template', 'Confidentiality'],
+      description: 'Standard 2-way mutual non-disclosure agreement approved by corporate legal.',
+      relatedTo: {
+        entityType: 'none',
+      },
+      uploadedBy: managerUser._id,
+      downloadCount: 45,
+      isStarred: true,
+      isShared: true,
+    },
+    {
+      name: 'Fintech Unicorn Case Study - 4x Pipeline Acceleration.pdf',
+      folder: 'Customer Case Studies',
+      fileType: 'pdf',
+      fileSize: 3800000,
+      version: '1.0',
+      status: 'approved',
+      tags: ['Case Study', 'Fintech', 'ROI Proof'],
+      description: 'Customer success story detailing how a top payments provider increased sales velocity by 400%.',
+      relatedTo: {
+        entityType: 'none',
+      },
+      uploadedBy: salesUser2._id,
+      downloadCount: 19,
+      isStarred: false,
+      isShared: true,
+    },
+    {
+      name: 'Zomato Procurement Quotation & Discount Terms.xlsx',
+      folder: 'Proposals & Quotes',
+      fileType: 'xlsx',
+      fileSize: 520000,
+      version: '1.1',
+      status: 'draft',
+      tags: ['Pricing', 'Zomato', 'Multi-Seat Discount'],
+      description: 'Commercial pricing model and multi-seat tier calculations for Zomato merchant team.',
+      relatedTo: {
+        entityType: 'deal',
+        entityId: deals[7]._id,
+        entityName: 'Zomato - Restaurant POS & Inventory Sync',
+      },
+      uploadedBy: salesUser._id,
+      downloadCount: 4,
+      isStarred: false,
+      isShared: false,
+    },
+  ];
+
+  await DocumentModel.insertMany(sampleDocuments);
+  console.log(`[Seed] Created ${sampleDocuments.length} sample sales documents.`);
   });
 
   console.log('[Seed] Seeding completed successfully!');

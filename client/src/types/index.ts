@@ -797,4 +797,138 @@ export interface EntityChangedPayload {
   data?: any;
 }
 
+// ================= ZOHO SALES: DOCUMENTS & FORECASTS TYPES =================
+
+export type DocumentStatus = 'draft' | 'under_review' | 'approved' | 'signed' | 'archived';
+export type RelatedEntityType = 'deal' | 'account' | 'lead' | 'contact' | 'none';
+
+export interface DocumentItem {
+  _id: string;
+  name: string;
+  folder: string;
+  fileType: string;
+  fileSize: number;
+  fileData?: string;
+  version: string;
+  status: DocumentStatus;
+  tags: string[];
+  description?: string;
+  relatedTo?: {
+    entityType: RelatedEntityType;
+    entityId?: string;
+    entityName?: string;
+  };
+  uploadedBy?: {
+    _id: string;
+    name: string;
+    email: string;
+    avatar?: string;
+  };
+  downloadCount: number;
+  isShared: boolean;
+  isStarred: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DocumentFolder {
+  name: string;
+  count: number;
+}
+
+export interface DocumentStats {
+  totalDocuments: number;
+  totalBytes: number;
+  starredCount: number;
+  folders: DocumentFolder[];
+}
+
+export interface ForecastSummary {
+  targetQuota: number;
+  closedWonAmount: number;
+  closedWonCount: number;
+  committedAmount: number;
+  committedCount: number;
+  bestCaseAmount: number;
+  totalPipelineAmount: number;
+  totalPipelineCount: number;
+  attainmentPercent: number;
+  gapAmount: number;
+  coverageRatio: number;
+}
+
+export interface ForecastAiInsights {
+  status: string;
+  predictedAttainment: number;
+  expectedFinalRevenue: number;
+  recommendation: string;
+  highRiskCount: number;
+  closingSoonCount: number;
+  highRiskDeals: Array<{
+    _id: string;
+    title: string;
+    amount: number;
+    stage: string;
+    probability: number;
+    weightedAmount: number;
+    expectedClose: string;
+    account?: { name: string };
+    aiRisk?: { level: string; score: number; reasons: string[] };
+  }>;
+  closingSoonDeals: Array<{
+    _id: string;
+    title: string;
+    amount: number;
+    stage: string;
+    expectedClose: string;
+    account?: { name: string };
+  }>;
+}
+
+export interface ForecastDealItem {
+  _id: string;
+  title: string;
+  amount: number;
+  stage: string;
+  probability: number;
+  weightedAmount: number;
+  expectedClose: string;
+  account?: { _id: string; name: string; industry?: string };
+  owner?: { _id: string; name: string; email: string };
+  aiRisk?: { level: string; score: number; reasons: string[]; explanation?: string };
+}
+
+export interface ForecastMonthlyBar {
+  monthKey: string;
+  monthLabel: string;
+  year: number;
+  monthIndex: number;
+  wonAmount: number;
+  committedAmount: number;
+  weightedAmount: number;
+  grossAmount: number;
+  dealsCount: number;
+}
+
+export interface ForecastDashboardData {
+  period: string;
+  year: number;
+  summary: ForecastSummary;
+  aiInsights: ForecastAiInsights;
+  stageBreakdown: Record<
+    string,
+    { count: number; totalAmount: number; weightedAmount: number; probability: number }
+  >;
+  monthlyBreakdown: ForecastMonthlyBar[];
+  deals: ForecastDealItem[];
+  repLeaderboard: Array<{
+    owner: { _id: string; name: string; email: string; role?: string };
+    wonAmount: number;
+    wonCount: number;
+    pipelineAmount: number;
+    weightedAmount: number;
+    dealsCount: number;
+  }>;
+}
+
 
