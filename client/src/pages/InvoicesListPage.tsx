@@ -11,7 +11,9 @@ import {
   Clock,
   Eye,
   Ban,
+  Sparkles,
 } from 'lucide-react';
+import { api } from '../api/client.js';
 import { fetchInvoices, voidInvoice } from '../api/phase3.js';
 import { Invoice, InvoiceStatus } from '../types/index.js';
 import { formatINR } from '../utils/money.js';
@@ -49,6 +51,20 @@ export const InvoicesListPage: React.FC = () => {
     },
     onError: (err: any) => {
       error(err.message || 'Failed to void invoice');
+    },
+  });
+
+  const autoGenerateMutation = useMutation({
+    mutationFn: async () => {
+      const res = await api.post('/invoices/auto-generate-all');
+      return res.data;
+    },
+    onSuccess: (res: any) => {
+      queryClient.invalidateQueries({ queryKey: ['invoices'] });
+      success(res.message || 'Original Tax Invoices generated successfully for all companies!');
+    },
+    onError: (err: any) => {
+      error(err.message || 'Failed to auto-generate invoices');
     },
   });
 
@@ -97,7 +113,13 @@ export const InvoicesListPage: React.FC = () => {
   };
 
   const invoices = data?.data || [];
-  const summary = data?.meta?.summary || { totalOutstanding: 0, totalOverdue: 0, countOverdue: 0 };
+  const rawSummary = (data as any)?.summary || (data as any)?.meta?.summary || {};
+  const summary = {
+    totalOutstanding: rawSummary.totalOutstanding ?? (rawSummary.totalOutstandingPaise ? rawSummary.totalOutstandingPaise / 100 : 0),
+    totalOverdue: rawSummary.totalOverdue ?? (rawSummary.totalOverduePaise ? rawSummary.totalOverduePaise / 100 : 0),
+    countOverdue: rawSummary.countOverdue ?? rawSummary.overdueCount ?? 0,
+    totalInvoices: rawSummary.totalInvoices ?? (data as any)?.pagination?.total ?? invoices.length,
+  };
 
   return (
     <div className="flex-1 flex flex-col p-6 max-w-7xl mx-auto w-full gap-6">
@@ -113,13 +135,25 @@ export const InvoicesListPage: React.FC = () => {
               Issue compliant GST invoices, collect payments, monitor overdue aging, and reconcile receivables.
             </p>
           </div>
-          <button
-            onClick={() => navigate('/quotes/new')}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-black dark:bg-white text-white dark:text-black text-sm font-semibold hover:bg-neutral-800 transition-colors shadow-sm shrink-0"
-          >
-            <Plus className="w-4 h-4" />
-            New Invoice (via Quote)
-          </button>
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <button
+              onClick={() => autoGenerateMutation.mutate()}
+              disabled={autoGenerateMutation.isPending}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-border bg-card text-foreground text-sm font-semibold hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors shadow-xs shrink-0"
+              title="Automatically generate original Tax Invoices for all registered companies"
+            >
+              <Sparkles className={`w-4 h-4 text-[#F07B2A] ${autoGenerateMutation.isPending ? 'animate-spin' : ''}`} />
+              {autoGenerateMutation.isPending ? 'Generating Invoices...' : '⚡ Auto-Generate for All Companies'}
+            </button>
+
+            <button
+              onClick={() => navigate('/quotes/new')}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-black dark:bg-white text-white dark:text-black text-sm font-semibold hover:bg-neutral-800 transition-colors shadow-sm shrink-0"
+            >
+              <Plus className="w-4 h-4" />
+              New Invoice (via Quote)
+            </button>
+          </div>
         </div>
       </Reveal>
 
@@ -282,8 +316,11 @@ export const InvoicesListPage: React.FC = () => {
                             </button>
 
                             <button
-                              onClick={() => window.open(`/api/invoices/${inv._id}/pdf`, '_blank')}
-                              title="Download PDF"
+                              onClick={() => {
+                                const token = localStorage.getItem('flowdesk_token') || '';
+                                window.open(`/api/invoices/${inv._id}/pdf?token=${encodeURIComponent(token)}`, '_blank');
+                              }}
+                              title="Download Official PDF"
                               className="p-1.5 rounded-lg text-muted hover:text-foreground hover:bg-[#F4F4F5] dark:hover:bg-[#27272A] transition-colors"
                             >
                               <Download className="w-4 h-4" />

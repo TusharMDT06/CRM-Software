@@ -13,6 +13,7 @@ import { logActivity } from '../utils/activityHelper.js';
 import { toCSV } from '../utils/csvHelper.js';
 import { paginateQuery } from '../utils/paginationHelper.js';
 import { hasVersionConflict, sendConflictResponse } from '../utils/conflictHelper.js';
+import { generateInvoiceForAccount } from '../utils/autoInvoiceHelper.js';
 
 export const accountsRouter = Router();
 
@@ -289,6 +290,17 @@ accountsRouter.post('/', requireWithinRecordLimit, validateBody(accountSchema), 
       entityId: account._id,
       createdBy: user._id,
     });
+
+    // Automatically generate authentic Tax Invoice for newly registered company
+    try {
+      await generateInvoiceForAccount({
+        accountId: account._id,
+        userId: user._id,
+        status: 'sent',
+      });
+    } catch (invErr) {
+      console.error('[Account] Auto-invoice generation error:', invErr);
+    }
 
     res.status(201).json(account);
   } catch (error: any) {

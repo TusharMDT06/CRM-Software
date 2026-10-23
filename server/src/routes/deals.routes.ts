@@ -14,6 +14,8 @@ import { toCSV } from '../utils/csvHelper.js';
 import { paginateQuery } from '../utils/paginationHelper.js';
 import { hasVersionConflict, sendConflictResponse } from '../utils/conflictHelper.js';
 import { sendNotification } from '../utils/notificationService.js';
+import { Invoice } from '../models/Invoice.js';
+import { generateInvoiceForAccount } from '../utils/autoInvoiceHelper.js';
 
 export const dealsRouter = Router();
 
@@ -299,6 +301,24 @@ dealsRouter.patch('/:id', validateBody(dealUpdateSchema), async (req: AuthReques
           entityType: 'deal',
           entityId: deal._id.toString(),
         }).catch(() => {});
+      }
+
+      // Auto-generate Tax Invoice when deal is WON
+      if (req.body.stage === 'won' && oldStage !== 'won' && deal.account) {
+        try {
+          const accId = (deal.account as any)?._id || deal.account;
+          const existingInvoice = await Invoice.findOne({ deal: deal._id });
+          if (!existingInvoice) {
+            await generateInvoiceForAccount({
+              accountId: accId,
+              dealId: deal._id,
+              userId: user._id,
+              status: 'sent',
+            });
+          }
+        } catch (invErr) {
+          console.error('[Deals] Auto-invoice on won error:', invErr);
+        }
       }
     }
 

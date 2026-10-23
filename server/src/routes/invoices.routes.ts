@@ -20,6 +20,10 @@ import { calculateDocumentTotals, paiseToRupees } from '../utils/moneyHelper.js'
 import { generateDocumentPDF } from '../utils/pdfGenerator.js';
 import { logActivity } from '../utils/activityHelper.js';
 import { eventBus } from '../utils/eventBus.js';
+import {
+  autoGenerateMissingInvoicesForAllAccounts,
+  generateInvoiceForAccount,
+} from '../utils/autoInvoiceHelper.js';
 
 export const invoicesRouter = Router();
 
@@ -105,14 +109,30 @@ invoicesRouter.get('/', async (req: AuthRequest, res: Response) => {
       }
     });
 
+    const totalOutstanding = paiseToRupees(totalOutstandingPaise);
+    const totalOverdue = paiseToRupees(totalOverduePaise);
+    const totalCollected = paiseToRupees(totalCollectedPaise);
+
     res.json({
       data,
       summary: {
+        totalOutstanding,
+        totalOverdue,
+        totalCollected,
         totalOutstandingPaise,
         totalOverduePaise,
         totalCollectedPaise,
         overdueCount,
+        countOverdue: overdueCount,
         totalInvoices: total,
+      },
+      meta: {
+        summary: {
+          totalOutstanding,
+          totalOverdue,
+          countOverdue: overdueCount,
+          totalInvoices: total,
+        },
       },
       pagination: {
         page,
@@ -123,6 +143,20 @@ invoicesRouter.get('/', async (req: AuthRequest, res: Response) => {
     });
   } catch (error: any) {
     res.status(500).json({ message: error.message || 'Failed to fetch invoices' });
+  }
+});
+
+// POST /invoices/auto-generate-all
+invoicesRouter.post('/auto-generate-all', async (req: AuthRequest, res: Response) => {
+  try {
+    const user = req.user!;
+    const result = await autoGenerateMissingInvoicesForAllAccounts(user.tenantId, user._id);
+    res.json({
+      message: `Successfully generated original invoices for ${result.count} companies.`,
+      ...result,
+    });
+  } catch (error: any) {
+    res.status(500).json({ message: error.message || 'Failed to auto-generate invoices' });
   }
 });
 

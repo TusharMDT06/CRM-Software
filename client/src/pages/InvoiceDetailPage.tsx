@@ -24,6 +24,7 @@ import { formatINR, paiseToRupees, rupeesToPaise } from '../utils/money.js';
 import { useToast } from '../context/ToastContext.js';
 import { useAuth } from '../context/AuthContext.js';
 import { Reveal } from '../components/motion/Motion.js';
+import { OriginalTaxInvoice } from '../components/billing/OriginalTaxInvoice.js';
 
 export const InvoiceDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -39,6 +40,7 @@ export const InvoiceDetailPage: React.FC = () => {
   const [paymentNotes, setPaymentNotes] = useState('');
   const [showVoidModal, setShowVoidModal] = useState(false);
   const [voidReason, setVoidReason] = useState('');
+  const [activeTab, setActiveTab] = useState<'invoice' | 'manage'>('invoice');
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['invoice', id],
@@ -221,9 +223,12 @@ export const InvoiceDetailPage: React.FC = () => {
               </button>
             )}
 
-            {/* Download PDF */}
+            {/* Download PDF with auth token */}
             <button
-              onClick={() => window.open(`/api/invoices/${invoice._id}/pdf`, '_blank')}
+              onClick={() => {
+                const token = localStorage.getItem('flowdesk_token') || '';
+                window.open(`/api/invoices/${invoice._id}/pdf?token=${encodeURIComponent(token)}`, '_blank');
+              }}
               className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-border text-xs font-semibold text-foreground hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors shadow-xs"
             >
               <Download className="w-3.5 h-3.5" />
@@ -243,6 +248,40 @@ export const InvoiceDetailPage: React.FC = () => {
           </div>
         </div>
       </Reveal>
+
+      {/* View Switcher Tabs (Print Hidden) */}
+      <div className="print:hidden flex items-center border-b border-border gap-2">
+        <button
+          onClick={() => setActiveTab('invoice')}
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-colors ${
+            activeTab === 'invoice'
+              ? 'border-foreground text-foreground'
+              : 'border-transparent text-muted hover:text-foreground'
+          }`}
+        >
+          📄 Original Tax Invoice Sheet (कर चालान)
+        </button>
+
+        <button
+          onClick={() => setActiveTab('manage')}
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-colors ${
+            activeTab === 'manage'
+              ? 'border-foreground text-foreground'
+              : 'border-transparent text-muted hover:text-foreground'
+          }`}
+        >
+          ⚙️ Manage & Payments Log ({payments.length})
+        </button>
+      </div>
+
+      {activeTab === 'invoice' ? (
+        <OriginalTaxInvoice
+          invoice={invoice}
+          onRecordPayment={handleOpenPaymentDrawer}
+          onSendInvoice={() => sendMutation.mutate()}
+        />
+      ) : (
+        <>
 
       {/* KPI Cards: Total, Paid, Balance */}
       <Reveal direction="down" delay={0.05}>
@@ -421,6 +460,8 @@ export const InvoiceDetailPage: React.FC = () => {
           </div>
         </div>
       </div>
+      </>
+      )}
 
       {/* Record Payment Drawer / Modal */}
       {isPaymentDrawerOpen && (

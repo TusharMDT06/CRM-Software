@@ -16,12 +16,19 @@ export async function authenticate(
   next: NextFunction
 ): Promise<void> {
   const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+  const queryToken = typeof req.query.token === 'string' ? req.query.token : undefined;
+  let token: string | undefined;
+
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    token = authHeader.split(' ')[1];
+  } else if (queryToken) {
+    token = queryToken;
+  }
+
+  if (!token) {
     res.status(401).json({ message: 'Authentication token required' });
     return;
   }
-
-  const token = authHeader.split(' ')[1];
   const secret = process.env.JWT_SECRET || 'flowdesk_super_secret_jwt_key_2026_crm';
   const requestId = (req.headers['x-request-id'] as string) || crypto.randomUUID();
   req.requestId = requestId;

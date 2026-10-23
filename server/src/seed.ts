@@ -1668,6 +1668,69 @@ Best regards,
         owner: managerUser._id,
       };
     })(),
+    // Invoice 7: BrowserStack Labs (Sent)
+    (() => {
+      const items = [
+        { product: products[0]._id, name: products[0].name, qty: 1, unitPrice: products[0].unitPrice, discountPct: 0, taxRate: 18 },
+      ];
+      const totals = calculateDocumentTotals(items, 'intra');
+      return {
+        number: 'INV-2026-0007',
+        status: 'sent',
+        deal: deals[6]._id,
+        account: accounts[6]._id,
+        contact: contacts[6]._id,
+        items: totals.lineDetails,
+        subtotal: totals.subtotal,
+        discountTotal: totals.discountTotal,
+        taxTotal: totals.taxTotal,
+        cgstTotal: totals.cgstTotal,
+        sgstTotal: totals.sgstTotal,
+        igstTotal: totals.igstTotal,
+        total: totals.total,
+        taxMode: 'intra',
+        issueDate: pastDays(3),
+        dueDate: futureDays(27),
+        paidTotal: 0,
+        balance: totals.total,
+        sentAt: pastDays(3),
+        notes: 'Annual Enterprise Developer Suite license tax invoice.',
+        terms: companySettings.defaultTerms,
+        owner: salesUser2._id,
+      };
+    })(),
+    // Invoice 8: Delhivery Logistics (Sent)
+    (() => {
+      const items = [
+        { product: products[1]._id, name: products[1].name, qty: 2, unitPrice: products[1].unitPrice, discountPct: 5, taxRate: 18 },
+        { product: products[2]._id, name: products[2].name, qty: 1, unitPrice: products[2].unitPrice, discountPct: 0, taxRate: 18 },
+      ];
+      const totals = calculateDocumentTotals(items, 'inter');
+      return {
+        number: 'INV-2026-0008',
+        status: 'sent',
+        deal: deals[7]._id,
+        account: accounts[7]._id,
+        contact: contacts[7]._id,
+        items: totals.lineDetails,
+        subtotal: totals.subtotal,
+        discountTotal: totals.discountTotal,
+        taxTotal: totals.taxTotal,
+        cgstTotal: totals.cgstTotal,
+        sgstTotal: totals.sgstTotal,
+        igstTotal: totals.igstTotal,
+        total: totals.total,
+        taxMode: 'inter',
+        issueDate: pastDays(2),
+        dueDate: futureDays(28),
+        paidTotal: 0,
+        balance: totals.total,
+        sentAt: pastDays(2),
+        notes: 'Enterprise platform setup and multi-hub logistics routing suite.',
+        terms: companySettings.defaultTerms,
+        owner: managerUser._id,
+      };
+    })(),
   ];
   const invoices = await Invoice.insertMany(invoicesData);
   console.log(`[Seed] Created ${invoices.length} invoices.`);
@@ -1699,7 +1762,7 @@ Best regards,
   // 15. Atomic Counters
   await Counter.insertMany([
     { prefix: 'QT', year: 2026, seq: 7 },
-    { prefix: 'INV', year: 2026, seq: 6 },
+    { prefix: 'INV', year: 2026, seq: 8 },
   ]);
   console.log('[Seed] Initialized atomic numbering counters.');
 

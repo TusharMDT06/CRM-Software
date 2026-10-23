@@ -66,8 +66,11 @@ export async function generateDocumentPDF(options: DocumentPDFOptions): Promise<
       pdf.text(`Email: ${company.email || '-'} | Phone: ${company.phone || '-'}`, margin, metaY);
 
       // Right: Document Badge & Meta
-      pdf.font('Helvetica-Bold').fontSize(16).fillColor('#000000').text(title, pageWidth - margin - 200, 40, { width: 200, align: 'right' });
-      pdf.font('Helvetica-Bold').fontSize(10).fillColor('#333333').text(doc.number, pageWidth - margin - 200, 62, { width: 200, align: 'right' });
+      if (isInvoice) {
+        pdf.font('Helvetica-Bold').fontSize(7.5).fillColor('#666666').text('ORIGINAL FOR RECIPIENT', pageWidth - margin - 200, 26, { width: 200, align: 'right' });
+      }
+      pdf.font('Helvetica-Bold').fontSize(16).fillColor('#000000').text(title, pageWidth - margin - 200, 38, { width: 200, align: 'right' });
+      pdf.font('Helvetica-Bold').fontSize(10).fillColor('#333333').text(doc.number, pageWidth - margin - 200, 60, { width: 200, align: 'right' });
 
       pdf.font('Helvetica').fontSize(8).fillColor('#666666');
       const dateLabel = isInvoice ? 'Issue Date:' : 'Date:';
@@ -100,6 +103,12 @@ export async function generateDocumentPDF(options: DocumentPDFOptions): Promise<
       }
       if (doc.account?.city || doc.account?.state) {
         pdf.text(`${doc.account?.city || ''}${doc.account?.city && doc.account?.state ? ', ' : ''}${doc.account?.state || ''}`, margin, custY);
+        custY += 12;
+      }
+      const buyerGstin = doc.account?.custom?.gst_number || doc.account?.gstin;
+      if (buyerGstin) {
+        pdf.font('Helvetica-Bold').fontSize(8).fillColor('#111111').text(`GSTIN / UIN: ${buyerGstin}`, margin, custY);
+        pdf.font('Helvetica').fontSize(8).fillColor('#555555');
       }
 
       // ================= LINE ITEMS TABLE =================
@@ -224,6 +233,14 @@ export async function generateDocumentPDF(options: DocumentPDFOptions): Promise<
         pdf.font('Helvetica-Bold').fontSize(8).fillColor('#222222').text('TERMS & CONDITIONS:', margin, footerY);
         pdf.font('Helvetica').fontSize(7).fillColor('#666666').text(doc.terms || company.defaultTerms, margin, footerY + 12, {
           width: 320,
+        });
+      }
+
+      if (isInvoice && doc.balance === 0) {
+        pdf.rect(pageWidth - margin - 150, footerY - 26, 150, 20).strokeColor('#15803D').lineWidth(1.5).stroke();
+        pdf.font('Helvetica-Bold').fontSize(9).fillColor('#15803D').text('✓ PAID & SETTLED', pageWidth - margin - 150, footerY - 21, {
+          width: 150,
+          align: 'center',
         });
       }
 
