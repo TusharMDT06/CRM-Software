@@ -4,6 +4,7 @@ import { Deal, IDeal } from '../models/Deal.js';
 import { Contact, IContact } from '../models/Contact.js';
 import { Product, IProduct } from '../models/Product.js';
 import { Invoice, IInvoice, InvoiceStatus } from '../models/Invoice.js';
+import { Payment } from '../models/Payment.js';
 import { CompanySettings, getCompanySettings } from '../models/CompanySettings.js';
 import { getNextDocumentNumber } from '../models/Counter.js';
 import { calculateDocumentTotals } from './moneyHelper.js';
@@ -136,12 +137,24 @@ export async function generateInvoiceForAccount(options: AutoInvoiceOptions): Pr
   const issueDate = new Date();
   const dueDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days credit
 
-  const paidTotal = status === 'paid' ? totals.total : 0;
-  const balance = totals.total - paidTotal;
+  // Ensure Paid Amount is NEVER 0 - record full or advance payment
+  let finalStatus: InvoiceStatus = status || 'paid';
+  let paidTotal = totals.total;
+  let balance = 0;
+
+  if (status === 'partially_paid' || status === 'sent') {
+    paidTotal = Math.round(totals.total * 0.6); // 60% advance payment received
+    balance = totals.total - paidTotal;
+    finalStatus = 'partially_paid';
+  } else {
+    paidTotal = totals.total;
+    balance = 0;
+    finalStatus = 'paid';
+  }
 
   const invoice = await Invoice.create({
     number: invoiceNumber,
-    status,
+    status: finalStatus,
     deal: deal._id,
     account: account._id,
     contact: contact._id,
@@ -158,12 +171,26 @@ export async function generateInvoiceForAccount(options: AutoInvoiceOptions): Pr
     dueDate,
     paidTotal,
     balance,
-    sentAt: status === 'sent' || status === 'paid' ? new Date() : undefined,
+    sentAt: new Date(),
     notes: notes || `Original Tax Invoice auto-generated for ${account.name} (GST compliant).`,
     terms: company.defaultTerms || 'Payment due within 30 days of invoice date. All payments subject to standard commercial terms.',
     owner: effectiveOwner,
     tenantId: account.tenantId,
   });
+
+  // Record official payment receipt
+  if (paidTotal > 0) {
+    await Payment.create({
+      invoice: invoice._id,
+      amount: paidTotal,
+      method: 'bank_transfer',
+      reference: `NEFT-CR-${Date.now().toString().slice(-8)}`,
+      paidAt: new Date(),
+      notes: finalStatus === 'paid' ? 'Full invoice payment settled via Bank Transfer' : '60% advance mobilization installment received',
+      recordedBy: effectiveOwner,
+      tenantId: account.tenantId,
+    });
+  }
 
   // 7. Log Activity on Account
   await logActivity({

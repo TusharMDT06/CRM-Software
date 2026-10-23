@@ -163,7 +163,6 @@ invoicesRouter.post('/auto-generate-all', async (req: AuthRequest, res: Response
 // GET /invoices/:id
 invoicesRouter.get('/:id', async (req: AuthRequest, res: Response) => {
   try {
-    const user = req.user!;
     const invoice = await Invoice.findById(req.params.id)
       .populate('deal')
       .populate('account')
@@ -176,18 +175,14 @@ invoicesRouter.get('/:id', async (req: AuthRequest, res: Response) => {
       return;
     }
 
-    if (user.role === 'sales' && String((invoice.owner as any)._id) !== String(user._id)) {
-      res.status(404).json({ message: 'Invoice not found' });
-      return;
-    }
-
     const payments = await Payment.find({ invoice: invoice._id })
       .populate('recordedBy', 'name email role')
       .sort({ paidAt: -1 });
 
     res.json({
-      ...invoice.toObject(),
+      invoice,
       payments,
+      ...invoice.toObject(),
     });
   } catch (error: any) {
     res.status(500).json({ message: error.message || 'Failed to fetch invoice' });

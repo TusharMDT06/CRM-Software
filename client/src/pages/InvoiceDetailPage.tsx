@@ -48,8 +48,8 @@ export const InvoiceDetailPage: React.FC = () => {
     enabled: Boolean(id),
   });
 
-  const invoice = data?.invoice;
-  const payments = data?.payments || [];
+  const invoice = (data as any)?.invoice || ((data as any)?._id ? (data as any) : null);
+  const payments = (data as any)?.payments || [];
 
   const recordPaymentMutation = useMutation({
     mutationFn: (payload: any) => recordPayment(id!, payload),
@@ -421,7 +421,7 @@ export const InvoiceDetailPage: React.FC = () => {
               </div>
             ) : (
               <div className="space-y-3">
-                {payments.map((p) => (
+                {payments.map((p: any) => (
                   <div
                     key={p._id}
                     className="p-3.5 rounded-xl border border-border bg-[#FAFAFA] dark:bg-[#1E1E24]/40 flex items-start justify-between gap-2"

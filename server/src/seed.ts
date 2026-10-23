@@ -1481,7 +1481,7 @@ Best regards,
 
   // 13. Invoices
   const invoicesData = [
-    // Invoice 1: Draft
+    // Invoice 1: Paid
     (() => {
       const items = [
         { product: products[0]._id, name: products[0].name, qty: 2, unitPrice: products[0].unitPrice, discountPct: 0, taxRate: 18 },
@@ -1489,7 +1489,7 @@ Best regards,
       const totals = calculateDocumentTotals(items, 'intra');
       return {
         number: 'INV-2026-0001',
-        status: 'draft',
+        status: 'paid',
         deal: deals[1]._id,
         account: accounts[1]._id,
         contact: contacts[1]._id,
@@ -1504,22 +1504,24 @@ Best regards,
         taxMode: 'intra',
         issueDate: new Date(),
         dueDate: futureDays(30),
-        paidTotal: 0,
-        balance: totals.total,
-        notes: 'Draft invoice awaiting billing review.',
+        paidTotal: totals.total,
+        balance: 0,
+        sentAt: new Date(),
+        notes: 'Annual license tax invoice fully settled.',
         terms: companySettings.defaultTerms,
         owner: salesUser._id,
       };
     })(),
-    // Invoice 2: Sent
+    // Invoice 2: Partially Paid
     (() => {
       const items = [
         { product: products[1]._id, name: products[1].name, qty: 1, unitPrice: products[1].unitPrice, discountPct: 5, taxRate: 18 },
       ];
       const totals = calculateDocumentTotals(items, 'inter');
+      const paid = 3500000; // ₹35,000 paid
       return {
         number: 'INV-2026-0002',
-        status: 'sent',
+        status: 'partially_paid',
         deal: deals[2]._id,
         account: accounts[2]._id,
         contact: contacts[2]._id,
@@ -1534,10 +1536,10 @@ Best regards,
         taxMode: 'inter',
         issueDate: pastDays(5),
         dueDate: futureDays(25),
-        paidTotal: 0,
-        balance: totals.total,
+        paidTotal: paid,
+        balance: totals.total - paid,
         sentAt: pastDays(5),
-        notes: 'Invoice dispatched with GST bill.',
+        notes: 'Invoice dispatched with GST bill; 70% advance received.',
         terms: companySettings.defaultTerms,
         owner: salesUser._id,
       };
@@ -1548,7 +1550,7 @@ Best regards,
         { product: products[3]._id, name: products[3].name, qty: 1, unitPrice: products[3].unitPrice, discountPct: 0, taxRate: 18 },
       ];
       const totals = calculateDocumentTotals(items, 'intra');
-      const partialPaymentPaise = 4000000; // ₹40,000 paid
+      const partialPaymentPaise = 5000000; // ₹50,000 paid
       return {
         number: 'INV-2026-0003',
         status: 'partially_paid',
@@ -1605,15 +1607,16 @@ Best regards,
         owner: salesUser._id,
       };
     })(),
-    // Invoice 5: Overdue
+    // Invoice 5: Partially Paid
     (() => {
       const items = [
         { product: products[2]._id, name: products[2].name, qty: 1, unitPrice: products[2].unitPrice, discountPct: 0, taxRate: 18 },
       ];
       const totals = calculateDocumentTotals(items, 'inter');
+      const paid = 10000000; // ₹1,00,000 paid
       return {
         number: 'INV-2026-0005',
-        status: 'overdue',
+        status: 'partially_paid',
         deal: deals[4]._id,
         account: accounts[4]._id,
         contact: contacts[4]._id,
@@ -1628,15 +1631,15 @@ Best regards,
         taxMode: 'inter',
         issueDate: pastDays(45),
         dueDate: pastDays(15),
-        paidTotal: 0,
-        balance: totals.total,
+        paidTotal: paid,
+        balance: totals.total - paid,
         sentAt: pastDays(45),
-        notes: 'Overdue invoice. Payment reminder sent.',
+        notes: 'Initial milestone payment received; balance pending.',
         terms: companySettings.defaultTerms,
         owner: salesUser._id,
       };
     })(),
-    // Invoice 6: Void
+    // Invoice 6: Paid
     (() => {
       const items = [
         { product: products[4]._id, name: products[4].name, qty: 1, unitPrice: products[4].unitPrice, discountPct: 0, taxRate: 18 },
@@ -1644,7 +1647,7 @@ Best regards,
       const totals = calculateDocumentTotals(items, 'intra');
       return {
         number: 'INV-2026-0006',
-        status: 'void',
+        status: 'paid',
         deal: deals[5]._id,
         account: accounts[5]._id,
         contact: contacts[5]._id,
@@ -1659,16 +1662,15 @@ Best regards,
         taxMode: 'intra',
         issueDate: pastDays(20),
         dueDate: futureDays(10),
-        paidTotal: 0,
-        balance: totals.total,
-        voidedAt: pastDays(1),
-        voidReason: 'Cancelled due to amended entity contract.',
-        notes: 'Voided by manager.',
+        paidTotal: totals.total,
+        balance: 0,
+        sentAt: pastDays(20),
+        notes: 'Paid in full via Bank Transfer.',
         terms: companySettings.defaultTerms,
         owner: managerUser._id,
       };
     })(),
-    // Invoice 7: BrowserStack Labs (Sent)
+    // Invoice 7: BrowserStack Labs (Paid)
     (() => {
       const items = [
         { product: products[0]._id, name: products[0].name, qty: 1, unitPrice: products[0].unitPrice, discountPct: 0, taxRate: 18 },
@@ -1676,7 +1678,7 @@ Best regards,
       const totals = calculateDocumentTotals(items, 'intra');
       return {
         number: 'INV-2026-0007',
-        status: 'sent',
+        status: 'paid',
         deal: deals[6]._id,
         account: accounts[6]._id,
         contact: contacts[6]._id,
@@ -1691,24 +1693,25 @@ Best regards,
         taxMode: 'intra',
         issueDate: pastDays(3),
         dueDate: futureDays(27),
-        paidTotal: 0,
-        balance: totals.total,
+        paidTotal: totals.total,
+        balance: 0,
         sentAt: pastDays(3),
-        notes: 'Annual Enterprise Developer Suite license tax invoice.',
+        notes: 'Annual Enterprise Developer Suite license tax invoice settled.',
         terms: companySettings.defaultTerms,
         owner: salesUser2._id,
       };
     })(),
-    // Invoice 8: Delhivery Logistics (Sent)
+    // Invoice 8: Delhivery Logistics (Partially Paid)
     (() => {
       const items = [
         { product: products[1]._id, name: products[1].name, qty: 2, unitPrice: products[1].unitPrice, discountPct: 5, taxRate: 18 },
         { product: products[2]._id, name: products[2].name, qty: 1, unitPrice: products[2].unitPrice, discountPct: 0, taxRate: 18 },
       ];
       const totals = calculateDocumentTotals(items, 'inter');
+      const paid = 15000000; // ₹1,50,000 paid advance
       return {
         number: 'INV-2026-0008',
-        status: 'sent',
+        status: 'partially_paid',
         deal: deals[7]._id,
         account: accounts[7]._id,
         contact: contacts[7]._id,
@@ -1723,10 +1726,10 @@ Best regards,
         taxMode: 'inter',
         issueDate: pastDays(2),
         dueDate: futureDays(28),
-        paidTotal: 0,
-        balance: totals.total,
+        paidTotal: paid,
+        balance: totals.total - paid,
         sentAt: pastDays(2),
-        notes: 'Enterprise platform setup and multi-hub logistics routing suite.',
+        notes: 'Enterprise platform setup and multi-hub logistics routing advance received.',
         terms: companySettings.defaultTerms,
         owner: managerUser._id,
       };
@@ -1735,11 +1738,29 @@ Best regards,
   const invoices = await Invoice.insertMany(invoicesData);
   console.log(`[Seed] Created ${invoices.length} invoices.`);
 
-  // 14. Payments
+  // 14. Payments (for all non-zero paid amounts)
   const paymentsData = [
     {
+      invoice: invoices[0]._id, // INV-2026-0001
+      amount: invoices[0].paidTotal,
+      method: 'upi',
+      reference: 'UPI-RZP-991203',
+      paidAt: pastDays(1),
+      notes: 'Full payment received via UPI Corporate',
+      recordedBy: salesUser._id,
+    },
+    {
+      invoice: invoices[1]._id, // INV-2026-0002
+      amount: invoices[1].paidTotal,
+      method: 'bank_transfer',
+      reference: 'HDFC-RTGS-884129',
+      paidAt: pastDays(4),
+      notes: 'Advance mobilization installment received',
+      recordedBy: salesUser._id,
+    },
+    {
       invoice: invoices[2]._id, // INV-2026-0003
-      amount: 4000000,
+      amount: invoices[2].paidTotal,
       method: 'bank_transfer',
       reference: 'AXIS-NEFT-99238472',
       paidAt: pastDays(8),
@@ -1748,12 +1769,48 @@ Best regards,
     },
     {
       invoice: invoices[3]._id, // INV-2026-0004
-      amount: invoices[3].total,
+      amount: invoices[3].paidTotal,
       method: 'upi',
       reference: 'UPI-CR-2026-781923',
       paidAt: pastDays(10),
       notes: 'Full payment received in single installment',
       recordedBy: salesUser._id,
+    },
+    {
+      invoice: invoices[4]._id, // INV-2026-0005
+      amount: invoices[4].paidTotal,
+      method: 'bank_transfer',
+      reference: 'ICICI-NEFT-554411',
+      paidAt: pastDays(12),
+      notes: 'Partial payment processed via Corporate NEFT',
+      recordedBy: salesUser._id,
+    },
+    {
+      invoice: invoices[5]._id, // INV-2026-0006
+      amount: invoices[5].paidTotal,
+      method: 'bank_transfer',
+      reference: 'HDFC-NEFT-332199',
+      paidAt: pastDays(15),
+      notes: 'Annual CRM subscription settled in full',
+      recordedBy: managerUser._id,
+    },
+    {
+      invoice: invoices[6]._id, // INV-2026-0007
+      amount: invoices[6].paidTotal,
+      method: 'upi',
+      reference: 'UPI-BS-889123',
+      paidAt: pastDays(2),
+      notes: 'Full payment received for developer tools suite',
+      recordedBy: salesUser2._id,
+    },
+    {
+      invoice: invoices[7]._id, // INV-2026-0008
+      amount: invoices[7].paidTotal,
+      method: 'bank_transfer',
+      reference: 'YES-RTGS-112233',
+      paidAt: pastDays(1),
+      notes: 'Advance installment received via RTGS',
+      recordedBy: managerUser._id,
     },
   ];
   const payments = await Payment.insertMany(paymentsData);
